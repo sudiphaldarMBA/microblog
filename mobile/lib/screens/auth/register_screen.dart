@@ -2,8 +2,32 @@ import 'package:flutter/material.dart';
 
 import '../../widgets/custom_text_field.dart';
 
-class RegisterScreen extends StatelessWidget {
+class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
+
+  @override
+  State<RegisterScreen> createState() => _RegisterScreenState();
+}
+
+class _RegisterScreenState extends State<RegisterScreen> {
+  final TextEditingController usernameController = TextEditingController();
+
+  final TextEditingController emailController = TextEditingController();
+
+  final TextEditingController passwordController = TextEditingController();
+
+  final TextEditingController confirmPasswordController =
+      TextEditingController();
+
+  @override
+  void dispose() {
+    usernameController.dispose();
+    emailController.dispose();
+    passwordController.dispose();
+    confirmPasswordController.dispose();
+
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,11 +38,9 @@ class RegisterScreen extends StatelessWidget {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
-
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-
               const SizedBox(height: 20),
 
               const Icon(
@@ -53,21 +75,24 @@ class RegisterScreen extends StatelessWidget {
 
               const SizedBox(height: 40),
 
-              const CustomTextField(
+              CustomTextField(
+                controller: usernameController,
                 label: "Username",
                 icon: Icons.person,
               ),
 
               const SizedBox(height: 20),
 
-              const CustomTextField(
+              CustomTextField(
+                controller: emailController,
                 label: "Email",
                 icon: Icons.email,
               ),
 
               const SizedBox(height: 20),
 
-              const CustomTextField(
+              CustomTextField(
+                controller: passwordController,
                 label: "Password",
                 icon: Icons.lock,
                 obscureText: true,
@@ -75,7 +100,8 @@ class RegisterScreen extends StatelessWidget {
 
               const SizedBox(height: 20),
 
-              const CustomTextField(
+              CustomTextField(
+                controller: confirmPasswordController,
                 label: "Confirm Password",
                 icon: Icons.lock_outline,
                 obscureText: true,
@@ -87,7 +113,6 @@ class RegisterScreen extends StatelessWidget {
                 height: 50,
                 child: ElevatedButton(
                   onPressed: () {},
-
                   child: const Text(
                     "Create Account",
                     style: TextStyle(
@@ -103,12 +128,10 @@ class RegisterScreen extends StatelessWidget {
                 onPressed: () {
                   Navigator.pop(context);
                 },
-
                 child: const Text(
                   "Already have an account? Login",
                 ),
               ),
-
             ],
           ),
         ),
