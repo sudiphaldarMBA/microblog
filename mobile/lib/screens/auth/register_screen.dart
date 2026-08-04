@@ -1,6 +1,6 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 
+import '../../services/api_service.dart';
 import '../../widgets/custom_text_field.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -39,20 +39,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _isLoading = true;
     });
 
-    // Simulate API request
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      final response = await ApiService.register(
+        username: usernameController.text.trim(),
+        email: emailController.text.trim(),
+        password: passwordController.text,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(response["message"]),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error: $e"),
+        ),
+      );
+    }
+
+    if (!mounted) return;
 
     setState(() {
       _isLoading = false;
     });
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Registration Successful!"),
-      ),
-    );
   }
 
   @override
@@ -191,6 +206,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             height: 24,
                             child: CircularProgressIndicator(
                               strokeWidth: 3,
+                              color: Colors.white,
                             ),
                           )
                         : const Text(
