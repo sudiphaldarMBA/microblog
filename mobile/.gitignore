@@ -43,3 +43,14 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Node.js backend
+**/node_modules/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Vercel deployment files
+.vercel/

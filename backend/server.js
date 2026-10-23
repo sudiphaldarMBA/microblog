@@ -1,48 +1,87 @@
+require("dotenv").config();
+
 const express = require("express");
+const connectDB = require("./config/db");
 
 const app = express();
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-// ==============================
-// Middleware
-// ==============================
-app.use(express.json());
+// ==========================================================
+// BODY PARSER
+// ==========================================================
+//
+// Profile images are sent as compressed Base64 data URLs.
+// Allow a larger JSON body.
+// ==========================================================
 
-// ==============================
-// Import Routes
-// ==============================
-const apiRoutes = require("./routes/api");
+app.use(
+  express.json({
+    limit: "100mb",
+  })
+);
 
-// ==============================
-// Default Route
-// ==============================
+// ==========================================================
+// DEFAULT ROUTE
+// ==========================================================
+
 app.get("/", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "Welcome to MicroBlog Backend",
-    version: "1.0.0"
+  res.json({
+    status: "success",
+    message: "MicroBlog API is running",
+    version: "1.0.0",
   });
 });
 
-// ==============================
-// API Routes
-// ==============================
-app.use("/api", apiRoutes);
+// ==========================================================
+// ROUTES
+// ==========================================================
 
-// ==============================
-// 404 Route
-// ==============================
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: "Route not found"
-  });
-});
+const apiRoutes =
+  require("./routes/api");
 
-// ==============================
-// Start Server
-// ==============================
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
-});
+const postRoutes =
+  require("./routes/postRoutes");
+
+// ==========================================================
+// API ROUTES
+// ==========================================================
+
+app.use(
+  "/api",
+  apiRoutes
+);
+
+app.use(
+  "/api/posts",
+  postRoutes
+);
+
+// ==========================================================
+// START SERVER
+// ==========================================================
+
+const startServer = async () => {
+  try {
+    await connectDB();
+
+    app.listen(
+      PORT,
+      "0.0.0.0",
+      () => {
+        console.log(
+          `🚀 Server running on http://0.0.0.0:${PORT}`
+        );
+      }
+    );
+  } catch (error) {
+    console.error(
+      "❌ Failed to start server:",
+      error.message
+    );
+
+    process.exit(1);
+  }
+};
+
+startServer();

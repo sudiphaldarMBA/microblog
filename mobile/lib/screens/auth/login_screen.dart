@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/api_service.dart';
 import '../../widgets/custom_text_field.dart';
+import '../home/home_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -36,33 +37,38 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final response = await ApiService.login(
+      final result = await ApiService.login(
         email: emailController.text.trim(),
         password: passwordController.text,
       );
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(response["message"]),
-        ),
-      );
-    } catch (e) {
+      if (result["success"] == true) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => HomeScreen()),
+          (route) => false,
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result["message"] ?? "Login failed")),
+        );
+      }
+    } catch (error) {
       if (!mounted) return;
 
+      debugPrint("Login error: $error");
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Error: $e"),
-        ),
+        const SnackBar(content: Text("Unable to connect to the server")),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
-
-    if (!mounted) return;
-
-    setState(() {
-      _isLoading = false;
-    });
   }
 
   @override
@@ -78,21 +84,14 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 const SizedBox(height: 60),
 
-                const Icon(
-                  Icons.forum,
-                  size: 90,
-                  color: Colors.blue,
-                ),
+                const Icon(Icons.forum, size: 90, color: Colors.blue),
 
                 const SizedBox(height: 20),
 
                 const Center(
                   child: Text(
                     "MicroBlog",
-                    style: TextStyle(
-                      fontSize: 34,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 34, fontWeight: FontWeight.bold),
                   ),
                 ),
 
@@ -101,10 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const Center(
                   child: Text(
                     "Welcome Back!",
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.grey,
-                    ),
+                    style: TextStyle(fontSize: 18, color: Colors.grey),
                   ),
                 ),
 
@@ -157,17 +153,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         ? const SizedBox(
                             width: 24,
                             height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 3,
-                              color: Colors.white,
-                            ),
+                            child: CircularProgressIndicator(strokeWidth: 3),
                           )
-                        : const Text(
-                            "Login",
-                            style: TextStyle(
-                              fontSize: 18,
-                            ),
-                          ),
+                        : const Text("Login", style: TextStyle(fontSize: 18)),
                   ),
                 ),
 
@@ -180,14 +168,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) =>
-                                  const RegisterScreen(),
+                              builder: (context) => const RegisterScreen(),
                             ),
                           );
                         },
-                  child: const Text(
-                    "Create New Account",
-                  ),
+                  child: const Text("Create New Account"),
                 ),
               ],
             ),
