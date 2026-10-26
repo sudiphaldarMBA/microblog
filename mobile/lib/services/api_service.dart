@@ -10,7 +10,7 @@ class ApiService {
   // BASE URL
   // ============================================================
 
-  static const String baseUrl = 'http://192.168.1.7:3000/api';
+  static const String baseUrl = 'https://microblog-api-s2vk.onrender.com/api';
 
   static String get serverBaseUrl {
     final uri = Uri.parse(baseUrl);
@@ -435,6 +435,27 @@ class ApiService {
   }
 
   // ============================================================
+  // DELETE POST / REPOST
+  // ============================================================
+
+  static Future<Map<String, dynamic>> deletePost({
+    required String postId,
+  }) async {
+    if (postId.trim().isEmpty) {
+      return {'success': false, 'message': 'Post ID is required'};
+    }
+
+    final response = await http.delete(
+      Uri.parse('$baseUrl/posts/$postId'),
+      headers: await _headers(),
+    );
+
+    await _handleUnauthorized(response);
+
+    return _decode(response);
+  }
+
+  // ============================================================
   // LIKE
   // ============================================================
 
@@ -685,7 +706,7 @@ static Future<Map<String, dynamic>> deleteComment({
     try {
       // Directs payload calls back to your Node.js routing controllers
       final response = await http.post(
-        Uri.parse('$baseUrl/api/posts/$postId/share'),
+        Uri.parse('$baseUrl/posts/$postId/share'),
         headers: {
           'Content-Type': 'application/json',
           // Ensure your standard authorization headers map cleanly here if needed

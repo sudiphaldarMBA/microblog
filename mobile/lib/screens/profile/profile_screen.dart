@@ -1556,6 +1556,17 @@ Future<void> _showPhotoCaptionDialog({
     final repostOf =
         post["repostOf"];
 
+    final authorId =
+        authorRaw is Map
+            ? (authorRaw["_id"] ??
+                    authorRaw["id"])
+                ?.toString()
+            : authorRaw?.toString();
+
+    final isMine = authorId != null &&
+        authorId.isNotEmpty &&
+        authorId == _userId;
+
     return Container(
       width: double.infinity,
       padding:
@@ -1677,6 +1688,34 @@ Future<void> _showPhotoCaptionDialog({
                                 12,
                           ),
                         ),
+                        const Spacer(),
+                        if (isMine)
+                          GestureDetector(
+                            behavior:
+                                HitTestBehavior
+                                    .opaque,
+                            onTap: () =>
+                                _confirmDeletePost(
+                              postId,
+                              isRepost:
+                                  isRepost,
+                            ),
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets
+                                      .only(
+                                left: 8,
+                                bottom: 2,
+                              ),
+                              child: Icon(
+                                CupertinoIcons
+                                    .ellipsis,
+                                size: 20,
+                                color:
+                                    _muted,
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                     if (content
@@ -1784,6 +1823,195 @@ Future<void> _showPhotoCaptionDialog({
         ],
       ),
     );
+  }
+
+  // ============================================================
+  // DELETE POST / REPOST
+  // ============================================================
+
+  Future<void> _confirmDeletePost(
+    String postId, {
+    required bool isRepost,
+  }) async {
+    if (postId.isEmpty) return;
+
+    final label =
+        isRepost ? "repost" : "post";
+
+    final action =
+        await showModalBottomSheet<
+            bool>(
+      context: context,
+      backgroundColor: _surface,
+      shape:
+          const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(
+          top: Radius.circular(24),
+        ),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding:
+                const EdgeInsets.fromLTRB(
+              20,
+              20,
+              20,
+              24,
+            ),
+            child: Column(
+              mainAxisSize:
+                  MainAxisSize.min,
+              crossAxisAlignment:
+                  CrossAxisAlignment
+                      .start,
+              children: [
+                Text(
+                  "Delete $label?",
+                  style: TextStyle(
+                    color: _text,
+                    fontSize: 20,
+                    fontWeight:
+                        FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(
+                  height: 8,
+                ),
+                Text(
+                  isRepost
+                      ? "This repost will be removed from your profile and the home feed."
+                      : "This post will be removed from your profile and the home feed, along with its comments and any reposts of it.",
+                  style: TextStyle(
+                    color: _muted,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(
+                  height: 20,
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child:
+                          OutlinedButton(
+                        onPressed: () =>
+                            Navigator.pop(
+                          sheetContext,
+                          false,
+                        ),
+                        child: Text(
+                          "Cancel",
+                          style:
+                              TextStyle(
+                            color: _text,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(
+                      width: 12,
+                    ),
+                    Expanded(
+                      child:
+                          ElevatedButton(
+                        style: ElevatedButton
+                            .styleFrom(
+                          backgroundColor:
+                              Colors
+                                  .redAccent,
+                          foregroundColor:
+                              Colors
+                                  .white,
+                        ),
+                        onPressed: () =>
+                            Navigator.pop(
+                          sheetContext,
+                          true,
+                        ),
+                        child:
+                            const Text(
+                          "Delete",
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (action != true || !mounted) {
+      return;
+    }
+
+    try {
+      final result =
+          await ApiService.deletePost(
+        postId: postId,
+      );
+
+      if (result["success"] != true) {
+        throw Exception(
+          result["message"] ??
+              "Unable to delete $label",
+        );
+      }
+
+      final deleted = <String>{postId};
+
+      final ids =
+          result["data"]?["deletedIds"];
+
+      if (ids is List) {
+        deleted.addAll(
+          ids.map((e) => e.toString()),
+        );
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _allPosts.removeWhere(
+          (p) => deleted.contains(
+            p["_id"]?.toString(),
+          ),
+        );
+      });
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        SnackBar(
+          behavior:
+              SnackBarBehavior.floating,
+          content: Text(
+            "${label[0].toUpperCase()}${label.substring(1)} deleted",
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        SnackBar(
+          behavior:
+              SnackBarBehavior.floating,
+          content: Text(
+            error
+                .toString()
+                .replaceFirst(
+                  "Exception: ",
+                  "",
+                ),
+          ),
+        ),
+      );
+    }
   }
 
   // ============================================================
