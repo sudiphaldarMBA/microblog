@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/api_service.dart';
@@ -3665,10 +3666,7 @@ Future<void> _showPhotoCaptionDialog({
                   const SizedBox(
                     height: 8,
                   ),
-                  _profileMeta(
-                    Icons.link_rounded,
-                    _website,
-                  ),
+                  _websiteLink(),
                 ],
 
                 const SizedBox(
@@ -3763,6 +3761,72 @@ Future<void> _showPhotoCaptionDialog({
         ),
       ],
     );
+  }
+
+  Widget _websiteLink() {
+    const linkColor = Color(0xFF2563EB);
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _openWebsite,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.link_rounded,
+            size: 18,
+            color: linkColor,
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              _website,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: linkColor,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openWebsite() async {
+    var value = _website.trim();
+
+    if (value.isEmpty) return;
+
+    if (!value.startsWith(RegExp(r'https?://', caseSensitive: false))) {
+      value = 'https://$value';
+    }
+
+    final uri = Uri.tryParse(value);
+
+    var opened = false;
+
+    if (uri != null) {
+      try {
+        opened = await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+      } catch (error) {
+        debugPrint('Open website error: $error');
+      }
+    }
+
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Unable to open this link'),
+        ),
+      );
+    }
   }
 
   Widget _profileMeta(

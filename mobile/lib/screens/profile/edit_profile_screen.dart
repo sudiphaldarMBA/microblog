@@ -26,6 +26,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   bool _saving = false;
 
+  DateTime? _dateOfBirth;
+
   @override
   void initState() {
     super.initState();
@@ -53,6 +55,49 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _websiteController = TextEditingController(
       text: widget.user['website']?.toString() ?? '',
     );
+
+    final rawDob = widget.user['dateOfBirth']?.toString().trim() ?? '';
+
+    _dateOfBirth =
+        rawDob.isEmpty ? null : DateTime.tryParse(rawDob)?.toLocal();
+  }
+
+  String _dobIso(DateTime date) {
+    final m = date.month.toString().padLeft(2, '0');
+    final d = date.day.toString().padLeft(2, '0');
+
+    return '${date.year}-$m-$d';
+  }
+
+  String _dobLabel() {
+    final date = _dateOfBirth;
+
+    if (date == null) return '';
+
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  Future<void> _pickDateOfBirth() async {
+    final now = DateTime.now();
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dateOfBirth ?? DateTime(now.year - 18, now.month, now.day),
+      firstDate: DateTime(1900),
+      lastDate: now,
+      helpText: 'Date of birth',
+    );
+
+    if (picked != null && mounted) {
+      setState(() {
+        _dateOfBirth = picked;
+      });
+    }
   }
 
   @override
@@ -93,6 +138,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         bio: _bioController.text,
         location: _locationController.text,
         website: _websiteController.text,
+        dateOfBirth: _dateOfBirth == null ? '' : _dobIso(_dateOfBirth!),
       );
 
       if (!mounted) return;
@@ -110,6 +156,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 'bio': _bioController.text.trim(),
                 'location': _locationController.text.trim(),
                 'website': _websiteController.text.trim(),
+                'dateOfBirth':
+                    _dateOfBirth == null ? '' : _dobIso(_dateOfBirth!),
               };
 
         Navigator.pop(context, updatedUser);
@@ -139,7 +187,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Black & white button: white on dark theme, black on light theme.
+    final buttonBackground = isDark ? Colors.white : Colors.black;
+    final buttonForeground = isDark ? Colors.black : Colors.white;
 
     return Scaffold(
       appBar: AppBar(
@@ -147,12 +199,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           'Edit profile',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
-        actions: [
-          TextButton(
-            onPressed: _saving ? null : _save,
-            child: const Text('Save'),
-          ),
-        ],
       ),
       body: SafeArea(
         child: ListView(
@@ -200,18 +246,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               keyboardType: TextInputType.url,
               maxLength: 200,
             ),
+            _dobField(),
             const SizedBox(height: 20),
             SizedBox(
               height: 52,
               child: FilledButton(
                 onPressed: _saving ? null : _save,
-                style: FilledButton.styleFrom(backgroundColor: colors.primary),
+                style: FilledButton.styleFrom(
+                  backgroundColor: buttonBackground,
+                  foregroundColor: buttonForeground,
+                  disabledBackgroundColor:
+                      buttonBackground.withOpacity(0.6),
+                  disabledForegroundColor: buttonForeground,
+                ),
                 child: _saving
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
-                          color: Colors.white,
+                          color: buttonForeground,
                           strokeWidth: 2,
                         ),
                       )
@@ -222,6 +275,39 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _dobField() {
+    final label = _dobLabel();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(15),
+        onTap: _pickDateOfBirth,
+        child: InputDecorator(
+          decoration: InputDecoration(
+            labelText: 'Date of birth',
+            prefixIcon: const Icon(Icons.cake_outlined),
+            suffixIcon: _dateOfBirth == null
+                ? null
+                : IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () {
+                      setState(() {
+                        _dateOfBirth = null;
+                      });
+                    },
+                  ),
+            filled: true,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(15),
+            ),
+          ),
+          child: Text(label.isEmpty ? 'Select date' : label),
         ),
       ),
     );

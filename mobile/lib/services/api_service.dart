@@ -326,6 +326,7 @@ class ApiService {
     String? coverPhoto,
     String? location,
     String? website,
+    String? dateOfBirth,
   }) async {
     final body = <String, dynamic>{};
 
@@ -359,6 +360,11 @@ class ApiService {
 
     if (website != null) {
       body['website'] = website.trim();
+    }
+
+    // ISO date string (YYYY-MM-DD); an empty string clears it.
+    if (dateOfBirth != null) {
+      body['dateOfBirth'] = dateOfBirth.trim();
     }
 
     final response = await http.put(
