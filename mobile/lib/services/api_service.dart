@@ -441,6 +441,44 @@ class ApiService {
   }
 
   // ============================================================
+  // OTHER USERS: PUBLIC PROFILE + FOLLOW
+  // ============================================================
+
+  static Future<Map<String, dynamic>> getUserProfile({
+    required String userId,
+  }) async {
+    if (userId.trim().isEmpty) {
+      return {'success': false, 'message': 'User ID is required'};
+    }
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/users/$userId'),
+      headers: await _headers(),
+    );
+
+    await _handleUnauthorized(response);
+
+    return _decode(response);
+  }
+
+  static Future<Map<String, dynamic>> toggleFollow({
+    required String userId,
+  }) async {
+    if (userId.trim().isEmpty) {
+      return {'success': false, 'message': 'User ID is required'};
+    }
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/users/$userId/follow'),
+      headers: await _headers(),
+    );
+
+    await _handleUnauthorized(response);
+
+    return _decode(response);
+  }
+
+  // ============================================================
   // DELETE POST / REPOST
   // ============================================================
 

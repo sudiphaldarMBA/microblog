@@ -5,7 +5,10 @@ import '../../services/api_service.dart';
 class EditProfileScreen extends StatefulWidget {
   final Map<String, dynamic> user;
 
-  const EditProfileScreen({super.key, required this.user});
+  const EditProfileScreen({
+    super.key,
+    required this.user,
+  });
 
   @override
   State<EditProfileScreen> createState() => _EditProfileScreenState();
@@ -13,19 +16,13 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _nameController;
-
   late final TextEditingController _usernameController;
-
   late final TextEditingController _emailController;
-
   late final TextEditingController _bioController;
-
   late final TextEditingController _locationController;
-
   late final TextEditingController _websiteController;
 
   bool _saving = false;
-
   DateTime? _dateOfBirth;
 
   @override
@@ -56,17 +53,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       text: widget.user['website']?.toString() ?? '',
     );
 
-    final rawDob = widget.user['dateOfBirth']?.toString().trim() ?? '';
+    final rawDob = (
+      widget.user['dateOfBirth'] ??
+      widget.user['dob'] ??
+      ''
+    ).toString().trim();
 
-    _dateOfBirth =
-        rawDob.isEmpty ? null : DateTime.tryParse(rawDob)?.toLocal();
+    if (rawDob.isEmpty) {
+      _dateOfBirth = null;
+    } else {
+      final parsed = DateTime.tryParse(rawDob);
+
+      _dateOfBirth = parsed == null
+          ? null
+          : DateTime(parsed.year, parsed.month, parsed.day);
+    }
+
+    debugPrint('DOB RECEIVED BY EDIT PROFILE: "$rawDob"');
+    debugPrint(
+      'DOB INITIALIZED: ${_dateOfBirth == null ? "null" : _dobIso(_dateOfBirth!)}',
+    );
   }
 
   String _dobIso(DateTime date) {
-    final m = date.month.toString().padLeft(2, '0');
-    final d = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
 
-    return '${date.year}-$m-$d';
+    return '${date.year}-$month-$day';
   }
 
   String _dobLabel() {
@@ -75,8 +88,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (date == null) return '';
 
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
 
     return '${date.day} ${months[date.month - 1]} ${date.year}';
@@ -87,7 +110,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     final picked = await showDatePicker(
       context: context,
-      initialDate: _dateOfBirth ?? DateTime(now.year - 18, now.month, now.day),
+      initialDate: _dateOfBirth ??
+          DateTime(now.year - 18, now.month, now.day),
       firstDate: DateTime(1900),
       lastDate: now,
       helpText: 'Date of birth',
@@ -95,7 +119,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     if (picked != null && mounted) {
       setState(() {
-        _dateOfBirth = picked;
+        _dateOfBirth = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+        );
       });
     }
   }
@@ -116,9 +144,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (_saving) return;
 
     final name = _nameController.text.trim();
-
     final username = _usernameController.text.trim();
-
     final email = _emailController.text.trim();
 
     if (name.isEmpty || username.isEmpty || email.isEmpty) {
@@ -131,14 +157,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     });
 
     try {
+      final dobToSend =
+          _dateOfBirth == null ? '' : _dobIso(_dateOfBirth!);
+
+      debugPrint('DOB SENT TO API: "$dobToSend"');
+
       final result = await ApiService.updateProfile(
         displayName: name,
         username: username,
         email: email,
-        bio: _bioController.text,
-        location: _locationController.text,
-        website: _websiteController.text,
-        dateOfBirth: _dateOfBirth == null ? '' : _dobIso(_dateOfBirth!),
+        bio: _bioController.text.trim(),
+        location: _locationController.text.trim(),
+        website: _websiteController.text.trim(),
+        dateOfBirth: dobToSend,
+      );
+
+      debugPrint('DOB SAVE SUCCESS: ${result['success']}');
+      debugPrint('DOB SAVE MESSAGE: ${result['message']}');
+      debugPrint(
+        'DOB SAVE DATE: ${result['data']?['user']?['dateOfBirth']}',
       );
 
       if (!mounted) return;
@@ -146,28 +183,41 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (result['success'] == true) {
         final raw = result['data']?['user'];
 
-        final updatedUser = raw is Map
-            ? Map<String, dynamic>.from(raw)
-            : {
-                ...widget.user,
-                'displayName': name,
-                'username': username,
-                'email': email,
-                'bio': _bioController.text.trim(),
-                'location': _locationController.text.trim(),
-                'website': _websiteController.text.trim(),
-                'dateOfBirth':
-                    _dateOfBirth == null ? '' : _dobIso(_dateOfBirth!),
-              };
+        final Map<String, dynamic> updatedUser;
+
+        if (raw is Map) {
+          updatedUser = Map<String, dynamic>.from(raw);
+        } else {
+          // Fallback if the API response does not include the user object.
+          updatedUser = {
+            ...widget.user,
+            'displayName': name,
+            'username': username,
+            'email': email,
+            'bio': _bioController.text.trim(),
+            'location': _locationController.text.trim(),
+            'website': _websiteController.text.trim(),
+            'dateOfBirth': dobToSend,
+          };
+        }
+
+        debugPrint(
+          'DOB RETURNED TO PROFILE: "${updatedUser['dateOfBirth']}"',
+        );
 
         Navigator.pop(context, updatedUser);
-
         return;
       }
 
-      _showMessage(result['message']?.toString() ?? 'Unable to save profile');
+      _showMessage(
+        result['message']?.toString() ?? 'Unable to save profile',
+      );
     } catch (error) {
-      _showMessage(error.toString().replaceFirst('Exception: ', ''));
+      debugPrint('EDIT PROFILE SAVE ERROR: $error');
+
+      _showMessage(
+        error.toString().replaceFirst('Exception: ', ''),
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -182,16 +232,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(
+        SnackBar(content: Text(message)),
+      );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark =
+        Theme.of(context).brightness == Brightness.dark;
 
-    // Black & white button: white on dark theme, black on light theme.
-    final buttonBackground = isDark ? Colors.white : Colors.black;
-    final buttonForeground = isDark ? Colors.black : Colors.white;
+    final buttonBackground =
+        isDark ? Colors.white : Colors.black;
+    final buttonForeground =
+        isDark ? Colors.black : Colors.white;
 
     return Scaffold(
       appBar: AppBar(
@@ -270,7 +324,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       )
                     : const Text(
                         'Save changes',
-                        style: TextStyle(fontWeight: FontWeight.w800),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
               ),
             ),
@@ -307,7 +363,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               borderRadius: BorderRadius.circular(15),
             ),
           ),
-          child: Text(label.isEmpty ? 'Select date' : label),
+          child: Text(
+            label.isEmpty ? 'Select date' : label,
+          ),
         ),
       ),
     );
@@ -334,7 +392,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           hintText: hint,
           prefixIcon: Icon(icon),
           filled: true,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
         ),
       ),
     );

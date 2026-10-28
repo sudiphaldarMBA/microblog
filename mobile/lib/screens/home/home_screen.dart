@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 
@@ -14,10 +13,12 @@ import '../bookmark/bookmark_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../posts/create_post_screen.dart';
 import '../profile/profile_screen.dart';
+import '../profile/user_profile_screen.dart';
 import '../search/search_screen.dart';
 import '../settings/settings_screen.dart';
 import 'repost_modal_sheet.dart';
 import 'home_video_player.dart';
+import '../shorts/shorts_screen.dart';
 
 
 
@@ -35,8 +36,10 @@ class _HomeScreenState extends State<HomeScreen> {
   // COLORS
   // ============================================================
 
-  // Shared brand accent keeps active actions and poll selections consistent.
-  static const Color _accent = Color(0xFFF91880);
+  // Brand accent (pink). Used for active dots, spinners and highlights.
+  static const Color _accent = Color(0xFFFF2D78);
+  static const Color _red = Color(0xFFF91880);
+  static const Color _green = Color(0xFF00BA7C);
 
   bool get _dark =>
       Theme.of(context).brightness == Brightness.dark;
@@ -91,7 +94,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _showBottomNavigation = true;
 
-
   double _lastScrollOffset = 0;
 
   int _currentNavigationIndex = 0;
@@ -105,6 +107,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final Set<String> _likeLoading = {};
 
   final Map<String, int> _likeCounts = {};
+
+  final Map<String, int> _viewCounts = {};
 
   // ============================================================
   // BOOKMARK STATE
@@ -127,6 +131,12 @@ class _HomeScreenState extends State<HomeScreen> {
   final Map<String, int> _repostCounts = {};
 
   final Set<String> _repostLoading = {};
+
+  // ============================================================
+  // SHARE STATE
+  // ============================================================
+
+  final Map<String, int> _shareCounts = {};
 
   // ============================================================
   // POLL STATE
@@ -320,6 +330,9 @@ class _HomeScreenState extends State<HomeScreen> {
       final bookmarked =
           <String>{};
 
+      final views = 
+          <String, int>{};
+      
       final pollSelections =
           <String, int>{};
 
@@ -336,14 +349,18 @@ class _HomeScreenState extends State<HomeScreen> {
           item,
         );
 
-        final id =
-            post['_id']
-                    ?.toString() ??
-                '';
+        final id = post['_id']?.toString() ?? '';
 
-        if (id.isEmpty) {
-          continue;
-        }
+if (id.isEmpty) {
+  continue;
+}
+
+views[id] = _asInt(
+  post['viewsCount'] ??
+      post['viewCount'] ??
+      post['views'],
+);
+        
 
         // --------------------------------------------------------
         // LIKES
@@ -477,6 +494,10 @@ class _HomeScreenState extends State<HomeScreen> {
         _repostCounts
           ..clear()
           ..addAll(reposts);
+
+        _viewCounts
+        ..clear()
+        ..addAll(views);
 
         _likedPosts
           ..clear()
@@ -1092,13 +1113,31 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     try {
-      await SharePlus.instance.share(
+      final result =
+          await SharePlus.instance.share(
         ShareParams(
-          text: buffer.toString().trim(),
-          subject: 'Post from MicroBlog',
-          files: mediaFile != null ? [XFile(mediaFile.path)] : null,
+          text:
+              buffer.toString().trim(),
+          subject:
+              'Post from MicroBlog',
+          files: mediaFile != null
+              ? [XFile(mediaFile.path)]
+              : null,
         ),
       );
+
+      if (result.status ==
+              ShareResultStatus.success &&
+          mounted &&
+          postId != null &&
+          postId.isNotEmpty) {
+        setState(() {
+          _shareCounts[postId] =
+              (_shareCounts[postId] ??
+                      0) +
+                  1;
+        });
+      }
     } catch (error) {
       debugPrint(
         'Share error: $error',
@@ -1108,21 +1147,6 @@ class _HomeScreenState extends State<HomeScreen> {
         _showMessage(
           'Unable to share post',
         );
-      }
-    } finally {
-      // The share sheet has finished using the temporary attachment.
-      if (mediaFile != null) {
-        try {
-          if (await mediaFile.exists()) {
-            await mediaFile.delete();
-          }
-          final parent = mediaFile.parent;
-          if (await parent.exists()) {
-            await parent.delete();
-          }
-        } catch (cleanupError) {
-          debugPrint('Share temp-file cleanup error: $cleanupError');
-        }
       }
     }
   }
@@ -1190,9 +1214,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
 
-      final response = await http
-          .get(Uri.parse(url))
-          .timeout(const Duration(seconds: 20));
+      final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
         bytes = response.bodyBytes;
@@ -1322,6 +1344,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
 Widget _postCard(Map<String, dynamic> post) {
   final id = post['_id']?.toString() ?? '';
+  final views = _viewCounts[id] ?? 0;
 
   // ----------------------------------------------------------
   // REPOST DETECTION
@@ -1425,6 +1448,8 @@ Widget _postCard(Map<String, dynamic> post) {
   final reposts =
       _repostCounts[id] ?? _asInt(post['repostsCount']);
 
+  final shares = _shareCounts[id] ?? 0;
+
   return Container(
     color: _surface,
     child: Column(
@@ -1483,10 +1508,14 @@ Widget _postCard(Map<String, dynamic> post) {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _avatar(
-                displayedAvatar,
-                name,
-                21,
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _openAuthorProfile(author),
+                child: _avatar(
+                  displayedAvatar,
+                  name,
+                  21,
+                ),
               ),
 
               const SizedBox(width: 11),
@@ -1508,17 +1537,23 @@ Widget _postCard(Map<String, dynamic> post) {
                             crossAxisAlignment:
                                 CrossAxisAlignment.start,
                             children: [
-                              // Full name
-                              Text(
-                                name,
-                                maxLines: 1,
-                                overflow:
-                                    TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: _text,
-                                  fontSize: 15.5,
-                                  fontWeight:
-                                      FontWeight.w800,
+                              // Full name (tap to open profile)
+                              GestureDetector(
+                                behavior:
+                                    HitTestBehavior.opaque,
+                                onTap: () =>
+                                    _openAuthorProfile(author),
+                                child: Text(
+                                  name,
+                                  maxLines: 1,
+                                  overflow:
+                                      TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: _text,
+                                    fontSize: 15.5,
+                                    fontWeight:
+                                        FontWeight.w800,
+                                  ),
                                 ),
                               ),
 
@@ -1791,67 +1826,110 @@ Widget _postCard(Map<String, dynamic> post) {
                       ),
 
                     const SizedBox(height: 8),
+// ------------------------------------------------------
+// VIEW COUNT
+// ------------------------------------------------------
+
+Row(
+  children: [
+    Icon(
+      CupertinoIcons.eye,
+      size: 16,
+      color: _muted,
+    ),
+    const SizedBox(width: 5),
+    Text(
+      '${_formatCount(views)} views',
+      style: TextStyle(
+        color: _muted,
+        fontSize: 12,
+      ),
+    ),
+  ],
+),
+
+const SizedBox(height: 8),
 
                     // ------------------------------------------------
                     // ACTION BAR
                     // ------------------------------------------------
 
                     Row(
+                      mainAxisAlignment:
+                          MainAxisAlignment.spaceBetween,
                       children: [
-                        // Like — outline heart, filled pink when active.
+                        // LIKE
                         _actionButton(
                           icon: liked
-                              ? CupertinoIcons.heart_fill
-                              : CupertinoIcons.heart,
+                              ? Icons.favorite_rounded
+                              : Icons
+                                  .favorite_outline_rounded,
                           count: likes,
-                          color: liked ? _accent : _muted,
+                          color:
+                              liked ? _red : _muted,
                           active: liked,
-                          loading: _likeLoading.contains(id),
-                          label: liked ? 'Unlike' : 'Like',
-                          onTap: () => _toggleLike(id),
+                          loading:
+                              _likeLoading.contains(id),
+                          onTap: () {
+                            _toggleLike(id);
+                          },
                         ),
 
-                        // Comment — simple outline bubble.
+                        // COMMENT
+                        // Same comment icon used on the profile
+                        // screen, for visual consistency across
+                        // screens.
                         _actionButton(
                           icon: CupertinoIcons.bubble_left,
                           count: comments,
                           color: _muted,
-                          label: 'Comments',
-                          onTap: () => _openComments(id),
+                          onTap: () {
+                            _openComments(id);
+                          },
                         ),
 
-                        // Repost — intentionally preserve the existing glyph and behavior.
+                        // REPOST
                         _actionButton(
-                          icon: CupertinoIcons.arrow_2_squarepath,
+                          icon: CupertinoIcons
+                              .arrow_2_squarepath,
                           count: reposts,
                           color: _muted,
-                          loading: _repostLoading.contains(id),
-                          label: 'Repost',
-                          onTap: () => _repost(post),
+                          loading:
+                              _repostLoading.contains(id),
+                          onTap: () {
+                            _repost(post);
+                          },
                         ),
 
-                        // Share — minimal outline arrow in the same Cupertino family.
+                        // SHARE
                         _actionButton(
-                          icon: CupertinoIcons.arrowshape_turn_up_right,
-                          count: 0,
+                          icon:CupertinoIcons
+                              .arrowshape_turn_up_right,
+                          count: shares,
                           color: _muted,
-                          showCount: false,
-                          label: 'Share',
-                          onTap: () => _sharePost(post),
+                          onTap: () {
+                            _sharePost(post);
+                          },
                         ),
 
-                        // Bookmark — intentionally preserve the existing glyph and behavior.
+                        // BOOKMARK
                         _actionButton(
                           icon: saved
-                              ? CupertinoIcons.bookmark_fill
+                              ? CupertinoIcons
+                                  .bookmark_fill
                               : CupertinoIcons.bookmark,
                           count: 0,
-                          color: saved ? _accent : _muted,
+                          color:
+                              saved ? _accent : _muted,
                           active: saved,
-                          loading: _bookmarkLoading.contains(id),
+                          loading:
+                              _bookmarkLoading.contains(
+                            id,
+                          ),
+                          onTap: () {
+                            _toggleBookmark(id);
+                          },
                           showCount: false,
-                          label: saved ? 'Remove bookmark' : 'Save bookmark',
-                          onTap: () => _toggleBookmark(id),
                         ),
                       ],
                     ),
@@ -1873,90 +1951,78 @@ Widget _postCard(Map<String, dynamic> post) {
 
 
     // ============================================================
-  // POST ACTION BUTTON
-  // Each action receives an equal-width slot. The icon and count areas
-  // have fixed dimensions so toggles and count changes don't move siblings.
+  // ACTION BUTTON (MODERN X / INSTAGRAM FLOATING STYLE)
   // ============================================================
 
   Widget _actionButton({
-    required IconData icon,
+    IconData? icon,
+    Widget? iconWidget,
     required int count,
     required Color color,
-    required String label,
     required VoidCallback? onTap,
     bool active = false,
     bool loading = false,
     bool showCount = true,
   }) {
-    return Expanded(
-      child: Semantics(
-        button: true,
-        label: label,
-        child: GestureDetector(
-          onTap: onTap,
-          behavior: HitTestBehavior.opaque,
-          child: SizedBox(
-            height: 36,
-            child: Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 120),
-                      child: loading
-                          ? SizedBox(
-                              key: const ValueKey<String>('action-loading'),
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 1.5,
-                                color: color,
-                              ),
-                            )
-                          : Icon(
-                              icon,
-                              key: ValueKey<IconData>(icon),
-                              size: 21,
-                              color: color,
-                            ),
-                    ),
-                  ),
-                  const SizedBox(width: 2),
-                  SizedBox(
-                    width: 22,
-                    height: 18,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: showCount && count > 0
-                          ? FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                _formatCount(count),
-                                maxLines: 1,
-                                style: TextStyle(
-                                  color: color,
-                                  fontSize: 10.5,
-                                  fontWeight: active
-                                      ? FontWeight.w700
-                                      : FontWeight.w400,
-                                ),
-                              ),
-                            )
-                          : const SizedBox.shrink(),
-                    ),
-                  ),
-                ],
-              ),
+    assert(
+      icon != null || iconWidget != null,
+      'Either icon or iconWidget must be provided',
+    );
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 4,
+          vertical: 6,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 120),
+              child: loading
+                  ? SizedBox(
+                      key: const ValueKey('loading'),
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        color: color,
+                      ),
+                    )
+                  : iconWidget != null
+                      ? SizedBox(
+                          key: ValueKey(iconWidget.hashCode),
+                          width: 22,
+                          height: 22,
+                          child: iconWidget,
+                        )
+                      : Icon(
+                          icon,
+                          key: ValueKey(icon),
+                          size: 22,
+                          color: color,
+                        ),
             ),
-          ),
+            if (showCount && count > 0) ...[
+              const SizedBox(width: 5),
+              Text(
+                _formatCount(count),
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w400,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
   }
+
 
   // ============================================================
   // MEDIA
@@ -2255,9 +2321,15 @@ Widget _postCard(Map<String, dynamic> post) {
   }
 
   // ============================================================
-  // MODERN X-STYLE FLAT BOTTOM NAVIGATION
-  // Completely eliminates old pink layers and misaligned elements
+  // BOTTOM NAVIGATION
+  //
+  // HOME
+  // SEARCH
+  // CREATE
+  // BOOKMARK
+  // SETTINGS
   // ============================================================
+ 
   Widget _bottomNavigation() {
     return Container(
       decoration: BoxDecoration(
@@ -2265,37 +2337,40 @@ Widget _postCard(Map<String, dynamic> post) {
         border: Border(
           top: BorderSide(
             color: _divider,
-            width: 0.5, // Thin, sharp line indicator matching X app layout
+            width: 0.8,
           ),
         ),
       ),
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 56, // Clean, industry-standard modern layout elevation tracking
+          height: 62,
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _bottomNavItem(
-                icon: CupertinoIcons.house,
-                activeIcon: CupertinoIcons.house_fill,
-                index: 0,
-              ),
+  icon: CupertinoIcons.house,
+  activeIcon: CupertinoIcons.house_fill,
+  index: 0,
+  label: 'Home',
+),
               _bottomNavItem(
-                icon: CupertinoIcons.search,
-                activeIcon: CupertinoIcons.search,
-                index: 1,
-              ),
+  icon: CupertinoIcons.play_rectangle,
+  activeIcon: CupertinoIcons.play_rectangle_fill,
+  index: 1,
+  label: 'Shorts',
+),
               _buildCreateNavButton(),
               _bottomNavItem(
                 icon: CupertinoIcons.bookmark,
                 activeIcon: CupertinoIcons.bookmark_fill,
                 index: 3,
+                label: 'Bookmarks',
               ),
               _bottomNavItem(
-                icon: CupertinoIcons.settings,
-                activeIcon: CupertinoIcons.settings_solid,
+                icon: Icons.settings_outlined,
+                activeIcon: Icons.settings_rounded,
                 index: 4,
+                label: 'Settings',
               ),
             ],
           ),
@@ -2303,63 +2378,101 @@ Widget _postCard(Map<String, dynamic> post) {
       ),
     );
   }
-
+ 
   // ============================================================
-  // NAV ITEM (PERFECT GRAPHIC AND ALIGNMENT ACCENT INDEX)
+  // BOTTOM NAV ITEM
+  // Filled, slightly larger icon + small accent dot when active.
   // ============================================================
+ 
+  static const double _navIconSize = 26;
+ 
   Widget _bottomNavItem({
     required IconData icon,
     required IconData activeIcon,
     required int index,
+    required String label,
   }) {
-    final bool active = _currentNavigationIndex == index;
-
+    final active = _currentNavigationIndex == index;
+ 
     return Expanded(
-      child: GestureDetector(
-        onTap: () => _onBottomNavigationTap(index),
-        behavior: HitTestBehavior.opaque,
-        child: Center(
-          child: Icon(
-            active ? activeIcon : icon,
-            size: 24, // Optimized pixel balance grid shape
-            color: active ? _text : _muted, // Seamless transition without arbitrary color codes
+      child: Semantics(
+        button: true,
+        label: label,
+        child: GestureDetector(
+          onTap: () {
+            _onBottomNavigationTap(index);
+          },
+          behavior: HitTestBehavior.opaque,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Every nav icon uses the same fixed box and size, active or
+              // not, so Material and Cupertino glyphs line up.
+              SizedBox(
+                width: _navIconSize,
+                height: _navIconSize,
+                child: Center(
+                  child: Icon(
+                    active ? activeIcon : icon,
+                    size: 26,
+                    color: active ? _text : _muted,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: active ? 5 : 0,
+                height: active ? 5 : 0,
+                decoration: BoxDecoration(
+                  color: _accent,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
-
+ 
   // ============================================================
-  // FLAT LOGIC FAB ACCENT BUTTON (+)
+  // CREATE (+) BUTTON
   // ============================================================
+ 
   Widget _buildCreateNavButton() {
     return Expanded(
       child: Center(
-        child: InkWell(
-          onTap: () async => await _openCreatePost(),
-          borderRadius: BorderRadius.circular(99),
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: _text, // Uses pure black in light mode, pure white in dark mode
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              CupertinoIcons.add,
-              size: 22,
-              color: _surface, // Inverts directly onto background space seamlessly
+        child: Semantics(
+          button: true,
+          label: 'Create post',
+          child: GestureDetector(
+            onTap: () async {
+              await _openCreatePost();
+            },
+            child: Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: _text,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.add_rounded,
+                size: 30,
+                color: _surface,
+              ),
             ),
           ),
         ),
       ),
     );
   }
-
+ 
   // ============================================================
   // BOTTOM NAV ACTION
   // ============================================================
-
+ 
   Future<void>
       _onBottomNavigationTap(
     int index,
@@ -2368,12 +2481,12 @@ Widget _postCard(Map<String, dynamic> post) {
       if (!mounted) {
         return;
       }
-
+ 
       setState(() {
         _currentNavigationIndex =
             0;
       });
-
+ 
       if (_scrollController
           .hasClients) {
         _scrollController.animateTo(
@@ -2386,31 +2499,28 @@ Widget _postCard(Map<String, dynamic> post) {
               Curves.easeOutCubic,
         );
       }
-
+ 
       return;
     }
-
+ 
     if (!mounted) {
       return;
     }
-
+ 
     setState(() {
       _currentNavigationIndex =
           index;
     });
-
+ 
     switch (index) {
       case 1:
-        await Navigator.of(
-          context,
-        ).push(
-          MaterialPageRoute(
-            builder: (_) =>
-                const SearchScreen(),
-          ),
-        );
-        break;
-
+  await Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => const ShortsScreen(),
+    ),
+  );
+  break;
+ 
       case 3:
         await Navigator.of(
           context,
@@ -2420,14 +2530,14 @@ Widget _postCard(Map<String, dynamic> post) {
                 const BookmarkScreen(),
           ),
         );
-
+ 
         // Refresh posts when returning
         // so bookmark state is synchronized.
         if (mounted) {
           await _loadPosts();
         }
         break;
-
+ 
       case 4:
         await Navigator.of(
           context,
@@ -2439,21 +2549,21 @@ Widget _postCard(Map<String, dynamic> post) {
         );
         break;
     }
-
+ 
     if (!mounted) {
       return;
     }
-
+ 
     setState(() {
       _currentNavigationIndex =
           0;
     });
   }
-
+ 
   // ============================================================
   // CREATE POST
   // ============================================================
-
+ 
   Future<void>
       _openCreatePost() async {
     await Navigator.of(
@@ -2464,61 +2574,77 @@ Widget _postCard(Map<String, dynamic> post) {
             const CreatePostScreen(),
       ),
     );
-
+ 
     if (!mounted) {
       return;
     }
-
+ 
     setState(() {
       _currentNavigationIndex =
           0;
     });
-
+ 
     await _loadPosts();
   }
 
-  // ============================================================
+    // ============================================================
   // PROFILE NAVIGATION (UPDATED FOR IMAGE SYNCHRONIZATION)
   // ============================================================
 
-  bool _openingProfile = false;
+  // Opens the profile of whoever wrote a post. Your own posts go to
+  // your own profile; everyone else gets the public profile screen
+  // (with a Follow button).
+  Future<void> _openAuthorProfile(
+    Map<String, dynamic> author,
+  ) async {
+    final authorId =
+        author['_id']?.toString() ??
+        author['id']?.toString() ??
+        '';
 
-Future<void> _openProfile() async {
-  if (!mounted || _openingProfile) return;
+    if (authorId.isEmpty) return;
 
-  _openingProfile = true;
+    final myId =
+        _currentUser?['_id']?.toString() ??
+        _currentUser?['id']?.toString() ??
+        '';
 
-  try {
-    // Wait until the current tap/navigation frame is completely finished.
-    await WidgetsBinding.instance.endOfFrame;
+    if (authorId == myId) {
+      await _openProfile();
+      return;
+    }
 
-    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => UserProfileScreen(
+          userId: authorId,
+          initialUser: author,
+        ),
+      ),
+    );
+  }
 
-    final navigator = Navigator.of(context);
-
-    // Schedule the push after Flutter finishes the current frame.
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-
-    if (!mounted) return;
-
-    final profileChanged = await navigator.push(
+  Future<void> _openProfile() async {
+    // Await the pop result from the Profile Screen stack
+    final dynamic profileChanged = await Navigator.of(
+      context,
+    ).push(
       MaterialPageRoute(
         builder: (_) => const ProfileScreen(),
       ),
     );
 
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
+    // FIXED: If the profile screen passed back "true", or if any local images changed,
+    // force a full async reload of the user's data payload to sync the top-left avatar icon.
     if (profileChanged == true) {
       await _loadUser();
       await _loadPosts();
     }
-  } catch (error) {
-    debugPrint('Open Profile Error: $error');
-  } finally {
-    _openingProfile = false;
   }
-}
 
   // ============================================================
   // NOTIFICATIONS
@@ -2571,14 +2697,13 @@ Future<void> _openProfile() async {
                   ),
                 ),
                 onTap: () {
-                  final postId = post['_id']?.toString() ?? '';
-                  Navigator.pop(sheetContext);
-                  if (postId.isNotEmpty) {
-                    Clipboard.setData(ClipboardData(text: postId));
-                    _showMessage('Post ID copied');
-                  } else {
-                    _showMessage('Post ID is unavailable');
-                  }
+                  Navigator.pop(
+                    sheetContext,
+                  );
+
+                  _showMessage(
+                    'Post ID copied',
+                  );
                 },
               ),
               ListTile(
@@ -2986,14 +3111,21 @@ Future<void> _openProfile() async {
             0,
         centerTitle: true,
 
+        // Hairline under the app bar, matching the line above the
+        // bottom navigation so the two bars frame the feed evenly.
+        shape: Border(
+          bottom: BorderSide(
+            color: _divider,
+            width: 0.8,
+          ),
+        ),
+
         leading:
             IconButton(
           tooltip:
               'Profile',
-          onPressed: () {
-  debugPrint('HOME PROFILE BUTTON TAPPED');
-  _openProfile();
-},
+          onPressed:
+              _openProfile,
           icon:
               _loadingUser
                   ? SizedBox(
@@ -3033,22 +3165,33 @@ Future<void> _openProfile() async {
         ),
 
         actions: [
-          IconButton(
-            tooltip:
-                'Notifications',
-            onPressed:
-                _openNotifications,
-            icon:
-                Icon(
-              Icons
-                  .notifications_none_rounded,
-              color: _text,
-              size: 25,
-            ),
-          ),
-        ],
-      ),
+  IconButton(
+    tooltip: 'Search',
+    onPressed: () async {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const SearchScreen(),
+        ),
+      );
+    },
+    icon: Icon(
+      CupertinoIcons.search,
+      color: _text,
+      size: 25,
+    ),
+  ),
+  IconButton(
+    tooltip: 'Notifications',
+    onPressed: _openNotifications,
+    icon: Icon(
+      CupertinoIcons.bell,
+      color: _text,
+      size: 25,
+    ),
+  ),
+],
 
+),
       // ========================================================
       // FEED
       // ========================================================
@@ -3207,141 +3350,103 @@ class _CommentsSheet
       _CommentsSheetState();
 }
 
-class _CommentsSheetState extends State<_CommentsSheet> {
-  late final TextEditingController _controller;
+class _CommentsSheetState
+    extends State<_CommentsSheet> {
+  late final TextEditingController
+      _controller;
+
   late List<dynamic> _comments;
 
-  Map<String, dynamic>? _replyTo;
   bool _sending = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController();
-    _comments = List<dynamic>.from(widget.comments);
+
+    _controller =
+        TextEditingController();
+
+    _comments =
+        List<dynamic>.from(
+      widget.comments,
+    );
   }
 
   @override
   void dispose() {
     _controller.dispose();
+
     super.dispose();
   }
 
   // ============================================================
-  // COMMENT COUNT (INCLUDES REPLIES)
-  // ============================================================
-
-  int _countComments(List<dynamic> comments) {
-    var count = 0;
-    for (final raw in comments) {
-      if (raw is Map) {
-        count++;
-        final replies = raw['replies'];
-        if (replies is List) {
-          count += _countComments(List<dynamic>.from(replies));
-        }
-      }
-    }
-    return count;
-  }
-
-  // ============================================================
-  // ADD A NEW REPLY TO ITS PARENT IN THE EXISTING COMMENT TREE
-  // ============================================================
-
-  bool _appendReplyToParent(
-    List<dynamic> comments,
-    String parentId,
-    dynamic reply,
-  ) {
-    for (final raw in comments) {
-      if (raw is! Map) continue;
-
-      final id = raw['_id']?.toString() ?? '';
-      if (id == parentId) {
-        final replies = raw['replies'];
-        if (replies is List) {
-          replies.add(reply);
-        } else {
-          raw['replies'] = <dynamic>[reply];
-        }
-        return true;
-      }
-
-      final nested = raw['replies'];
-      if (nested is List &&
-          _appendReplyToParent(
-            List<dynamic>.from(nested),
-            parentId,
-            reply,
-          )) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // ============================================================
-  // SEND COMMENT OR REPLY
+  // SEND COMMENT
   // ============================================================
 
   Future<void> _sendComment() async {
-    final text = _controller.text.trim();
-    if (text.isEmpty || _sending) return;
+    final text =
+        _controller.text.trim();
 
-    final parentId = _replyTo?['_id']?.toString();
+    if (text.isEmpty ||
+        _sending) {
+      return;
+    }
 
     setState(() {
       _sending = true;
     });
 
     try {
-      final result = await ApiService.createComment(
+      final result =
+          await ApiService.createComment(
         postId: widget.postId,
         content: text,
-        parentId: parentId,
       );
 
       if (result['success'] != true) {
-        throw Exception(result['message'] ?? 'Unable to add comment');
+        throw Exception(
+          result['message'] ??
+              'Unable to add comment',
+        );
       }
 
-      final rawComment = result['data']?['comment'];
-      if (rawComment == null) {
-        throw Exception('Comment was not returned by the server');
-      }
+      final comment =
+          result['data']?['comment'];
 
-      final comment = rawComment is Map
-          ? Map<String, dynamic>.from(rawComment)
-          : null;
-      if (comment == null) {
-        throw Exception('Invalid comment response from the server');
+      if (!mounted) {
+        return;
       }
-
-      if (!mounted) return;
 
       setState(() {
-        if (parentId != null && parentId.isNotEmpty) {
-          final added = _appendReplyToParent(_comments, parentId, comment);
-          if (!added) {
-            // If the parent is unexpectedly absent from the local tree,
-            // keep the returned comment visible rather than losing it.
-            _comments.add(comment);
-          }
-        } else {
-          _comments.add(comment);
+        if (comment != null) {
+          _comments.add(
+            comment,
+          );
         }
 
         _controller.clear();
-        _replyTo = null;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(
         SnackBar(
-          content: Text(error.toString().replaceFirst('Exception: ', '')),
-          behavior: SnackBarBehavior.floating,
+          content:
+              Text(
+            error
+                .toString()
+                .replaceFirst(
+                  'Exception: ',
+                  '',
+                ),
+          ),
+          behavior:
+              SnackBarBehavior
+                  .floating,
         ),
       );
     } finally {
@@ -3353,441 +3458,282 @@ class _CommentsSheetState extends State<_CommentsSheet> {
     }
   }
 
-// Update a comment or reply inside the local nested list.
-bool _replaceCommentInTree(
-  List<dynamic> comments,
-  String commentId,
-  String content,
-  Map<String, dynamic>? serverComment,
-) {
-  for (final raw in comments) {
-    if (raw is! Map) continue;
-
-    if ((raw["_id"]?.toString() ?? "") == commentId) {
-      if (serverComment != null) {
-        raw.addAll(serverComment);
-      }
-
-      raw["content"] = content;
-      raw["updatedAt"] =
-          serverComment?["updatedAt"] ??
-          DateTime.now().toIso8601String();
-
-      return true;
-    }
-
-    final replies = raw["replies"];
-
-    if (replies is List &&
-        _replaceCommentInTree(
-          replies,
-          commentId,
-          content,
-          serverComment,
-        )) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-// Remove a comment or reply from the local nested list.
-bool _removeCommentFromTree(
-  List<dynamic> comments,
-  String commentId,
-) {
-  for (var i = 0; i < comments.length; i++) {
-    final raw = comments[i];
-    if (raw is! Map) continue;
-
-    if ((raw["_id"]?.toString() ?? "") == commentId) {
-      comments.removeAt(i);
-      return true;
-    }
-
-    final replies = raw["replies"];
-
-    if (replies is List &&
-        _removeCommentFromTree(replies, commentId)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-// Read the author ID regardless of whether author is populated.
-String _commentAuthorId(Map<String, dynamic> comment) {
-  final author = comment["author"];
-
-  if (author is Map) {
-    return author["_id"]?.toString() ??
-        author["id"]?.toString() ??
-        "";
-  }
-
-  return author?.toString() ?? "";
-}
-
-// Show the edit dialog and save the change to the backend.
-Future<void> _editComment(
-  Map<String, dynamic> comment,
-) async {
-  final commentId = comment["_id"]?.toString() ?? "";
-  if (commentId.isEmpty) return;
-
-  final controller = TextEditingController(
-    text: comment["content"]?.toString() ?? "",
-  );
-
-  final editedText = await showDialog<String>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: const Text("Edit comment"),
-      content: TextField(
-        controller: controller,
-        autofocus: true,
-        minLines: 2,
-        maxLines: 5,
-        maxLength: 300,
-        decoration: const InputDecoration(
-          hintText: "Write your comment...",
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(dialogContext),
-          child: const Text("Cancel"),
-        ),
-        FilledButton(
-          onPressed: () {
-            final value = controller.text.trim();
-
-            if (value.isNotEmpty) {
-              Navigator.pop(dialogContext, value);
-            }
-          },
-          child: const Text("Save"),
-        ),
-      ],
-    ),
-  );
-
-  controller.dispose();
-
-  if (!mounted ||
-      editedText == null ||
-      editedText.trim().isEmpty) {
-    return;
-  }
-
-  if (editedText.trim() ==
-      (comment["content"]?.toString() ?? "").trim()) {
-    return;
-  }
-
-  try {
-    final result = await ApiService.updateComment(
-      postId: widget.postId,
-      commentId: commentId,
-      content: editedText.trim(),
-    );
-
-    if (!mounted) return;
-
-    if (result["success"] != true) {
-      throw Exception(
-        result["message"] ?? "Unable to edit comment",
-      );
-    }
-
-    final data = result["data"];
-    final rawUpdated =
-        data is Map ? data["comment"] : null;
-
-    final updated = rawUpdated is Map
-        ? Map<String, dynamic>.from(rawUpdated)
-        : null;
-
-    setState(() {
-      _replaceCommentInTree(
-        _comments,
-        commentId,
-        editedText.trim(),
-        updated,
-      );
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Comment updated")),
-    );
-  } catch (error) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          error.toString().replaceFirst("Exception: ", ""),
-        ),
-      ),
-    );
-  }
-}
-
-// Confirm deletion, then remove the comment and its replies.
-Future<void> _deleteComment(
-  Map<String, dynamic> comment,
-) async {
-  final commentId = comment["_id"]?.toString() ?? "";
-  if (commentId.isEmpty) return;
-
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: const Text("Delete comment?"),
-      content: const Text(
-        "This comment and its replies will be deleted. "
-        "This action cannot be undone.",
-      ),
-      actions: [
-        TextButton(
-          onPressed: () =>
-              Navigator.pop(dialogContext, false),
-          child: const Text("Cancel"),
-        ),
-        TextButton(
-          onPressed: () =>
-              Navigator.pop(dialogContext, true),
-          child: const Text(
-            "Delete",
-            style: TextStyle(color: Colors.red),
-          ),
-        ),
-      ],
-    ),
-  );
-
-  if (!mounted || confirmed != true) return;
-
-  try {
-    final result = await ApiService.deleteComment(
-      postId: widget.postId,
-      commentId: commentId,
-    );
-
-    if (!mounted) return;
-
-    if (result["success"] != true) {
-      throw Exception(
-        result["message"] ?? "Unable to delete comment",
-      );
-    }
-
-    setState(() {
-      _removeCommentFromTree(_comments, commentId);
-
-      if (_replyTo?["_id"]?.toString() == commentId) {
-        _replyTo = null;
-      }
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Comment deleted")),
-    );
-  } catch (error) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          error.toString().replaceFirst("Exception: ", ""),
-        ),
-      ),
-    );
-  }
-}
-
   // ============================================================
   // AUTHOR HELPERS
   // ============================================================
 
-  String _displayName(Map<String, dynamic> user) {
-    final displayName = user['displayName']?.toString().trim() ?? '';
-    if (displayName.isNotEmpty) return displayName;
+  String _displayName(
+    Map<String, dynamic> user,
+  ) {
+    final displayName =
+        user['displayName']
+                ?.toString()
+                .trim() ??
+            '';
 
-    final name = user['name']?.toString().trim() ?? '';
-    if (name.isNotEmpty) return name;
+    if (displayName.isNotEmpty) {
+      return displayName;
+    }
 
-    final fullName = user['fullName']?.toString().trim() ?? '';
-    if (fullName.isNotEmpty) return fullName;
+    final name =
+        user['name']
+                ?.toString()
+                .trim() ??
+            '';
 
-    final username = user['username']?.toString().trim() ?? '';
-    if (username.isNotEmpty) return username;
+    if (name.isNotEmpty) {
+      return name;
+    }
+
+    final fullName =
+        user['fullName']
+                ?.toString()
+                .trim() ??
+            '';
+
+    if (fullName.isNotEmpty) {
+      return fullName;
+    }
+
+    final username =
+        user['username']
+                ?.toString()
+                .trim() ??
+            '';
+
+    if (username.isNotEmpty) {
+      return username;
+    }
 
     return 'User';
   }
 
-  String _username(Map<String, dynamic> user) {
-    return user['username']?.toString().trim() ?? '';
+  String _username(
+    Map<String, dynamic> user,
+  ) {
+    return user['username']
+            ?.toString()
+            .trim() ??
+        '';
   }
 
   // ============================================================
   // AVATAR
   // ============================================================
 
-  Widget _avatar(dynamic image, String name, double radius) {
-    final value = image?.toString().trim() ?? '';
-    final trimmedName = name.trim();
-    final letter = trimmedName.isEmpty ? '?' : trimmedName.substring(0, 1).toUpperCase();
+  Widget _avatar(
+    dynamic image,
+    String name,
+    double radius,
+  ) {
+    final value =
+        image
+                ?.toString()
+                .trim() ??
+            '';
 
-    Widget fallback() {
+    final letter =
+        name.trim().isEmpty
+            ? '?'
+            : name
+                .trim()
+                .substring(
+                  0,
+                  1,
+                )
+                .toUpperCase();
+
+    if (value.isEmpty) {
       return Container(
-        width: radius * 2,
-        height: radius * 2,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: widget.composerColor,
+        width:
+            radius * 2,
+        height:
+            radius * 2,
+        alignment:
+            Alignment.center,
+        decoration:
+            BoxDecoration(
+          shape:
+              BoxShape.circle,
+          color:
+              widget.composerColor,
         ),
-        child: Text(
+        child:
+            Text(
           letter,
-          style: TextStyle(
-            color: widget.textColor,
-            fontSize: radius * .72,
-            fontWeight: FontWeight.w800,
+          style:
+              TextStyle(
+            color:
+                widget.textColor,
+            fontWeight:
+                FontWeight.w800,
           ),
         ),
       );
     }
 
-    if (value.isEmpty) return fallback();
+    final bytes =
+        ApiService.dataUrlToBytes(
+      value,
+    );
 
-    final bytes = ApiService.dataUrlToBytes(value);
     if (bytes != null) {
       return CircleAvatar(
-        radius: radius,
-        backgroundImage: MemoryImage(Uint8List.fromList(bytes)),
+        radius:
+            radius,
+        backgroundImage:
+            MemoryImage(
+          Uint8List.fromList(
+            bytes,
+          ),
+        ),
       );
     }
 
-    final url = ApiService.normalizeImageUrl(value);
-    if (url == null) return fallback();
+    final url =
+        ApiService.normalizeImageUrl(
+      value,
+    );
+
+    if (url == null) {
+      return Container(
+        width:
+            radius * 2,
+        height:
+            radius * 2,
+        alignment:
+            Alignment.center,
+        decoration:
+            BoxDecoration(
+          shape:
+              BoxShape.circle,
+          color:
+              widget.composerColor,
+        ),
+        child:
+            Text(
+          letter,
+          style:
+              TextStyle(
+            color:
+                widget.textColor,
+            fontWeight:
+                FontWeight.w800,
+          ),
+        ),
+      );
+    }
 
     return CircleAvatar(
-      radius: radius,
-      backgroundImage: NetworkImage(url),
-      onBackgroundImageError: (_, _) {},
+      radius:
+          radius,
+      backgroundImage:
+          NetworkImage(
+        url,
+      ),
     );
   }
 
   // ============================================================
-  // BUILD A COMMENT AND ITS NESTED REPLIES
+  // BUILD COMMENT
   // ============================================================
 
-  Widget _buildComment(dynamic raw, {int depth = 0}) {
-    final comment = raw is Map
-        ? Map<String, dynamic>.from(raw)
-        : <String, dynamic>{};
+  Widget _buildComment(
+    dynamic raw,
+  ) {
+    final comment =
+        raw is Map
+            ? Map<String, dynamic>.from(
+                raw,
+              )
+            : <String, dynamic>{};
 
-    final authorRaw = comment['author'];
-    final author = authorRaw is Map
-        ? Map<String, dynamic>.from(authorRaw)
-        : <String, dynamic>{};
+    final authorRaw =
+        comment['author'];
 
-    final name = _displayName(author);
-    final username = _username(author);
-    final content = comment['content']?.toString() ?? '';
-    final replies = comment['replies'] is List
-        ? List<dynamic>.from(comment['replies'] as List)
-        : <dynamic>[];
+    final author =
+        authorRaw is Map
+            ? Map<String, dynamic>.from(
+                authorRaw,
+              )
+            : <String, dynamic>{};
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final name =
+        _displayName(
+      author,
+    );
+
+    final username =
+        _username(
+      author,
+    );
+
+    final content =
+        comment['content']
+                ?.toString() ??
+            '';
+
+    return Row(
+      crossAxisAlignment:
+          CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _avatar(author['avatar'], name, 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: TextStyle(
-                      color: widget.textColor,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  if (username.isNotEmpty)
-                    Text(
-                      '@$username',
-                      style: TextStyle(
-                        color: widget.mutedColor,
-                        fontSize: 12,
-                      ),
-                    ),
-                  const SizedBox(height: 5),
-                  Text(
-                    content,
-                    style: TextStyle(
-                      color: widget.textColor,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _replyTo = comment;
-                      });
-                    },
-                    style: TextButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(40, 28),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      alignment: Alignment.centerLeft,
-                    ),
-                    child: Text(
-                      'Reply',
-                      style: TextStyle(
-                        color: widget.mutedColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+        _avatar(
+          author['avatar'],
+          name,
+          20,
         ),
-        if (replies.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(left: 26, top: 8),
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border(
-                  left: BorderSide(
-                    color: widget.dividerColor,
-                    width: 1.5,
-                  ),
+
+        const SizedBox(
+          width: 10,
+        ),
+
+        Expanded(
+          child: Column(
+            crossAxisAlignment:
+                CrossAxisAlignment
+                    .start,
+            children: [
+              Text(
+                name,
+                style:
+                    TextStyle(
+                  color:
+                      widget.textColor,
+                  fontWeight:
+                      FontWeight.w700,
                 ),
               ),
-              padding: const EdgeInsets.only(left: 12),
-              child: Column(
-                children: [
-                  for (int i = 0; i < replies.length; i++) ...[
-                    _buildComment(replies[i], depth: depth + 1),
-                    if (i != replies.length - 1)
-                      const SizedBox(height: 14),
-                  ],
-                ],
+
+              if (username
+                  .isNotEmpty)
+                Text(
+                  '@$username',
+                  style:
+                      TextStyle(
+                    color:
+                        widget.mutedColor,
+                    fontSize:
+                        12,
+                  ),
+                ),
+
+              const SizedBox(
+                height: 5,
               ),
-            ),
+
+              Text(
+                content,
+                style:
+                    TextStyle(
+                  color:
+                      widget.textColor,
+                  height:
+                      1.4,
+                ),
+              ),
+            ],
           ),
+        ),
       ],
     );
   }
@@ -3797,157 +3743,288 @@ Future<void> _deleteComment(
   // ============================================================
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return AnimatedPadding(
-      duration: const Duration(milliseconds: 180),
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
+      duration:
+          const Duration(
+        milliseconds: 180,
       ),
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height * .78,
-        child: Column(
+      padding:
+          EdgeInsets.only(
+        bottom:
+            MediaQuery.of(
+          context,
+        ).viewInsets.bottom,
+      ),
+      child:
+          SizedBox(
+        height:
+            MediaQuery.of(
+                  context,
+                ).size.height *
+                .78,
+        child:
+            Column(
           children: [
-            const SizedBox(height: 10),
+            const SizedBox(
+              height: 10,
+            ),
+
             Container(
               width: 42,
               height: 4,
-              decoration: BoxDecoration(
-                color: widget.mutedColor.withValues(alpha: .4),
-                borderRadius: BorderRadius.circular(99),
+              decoration:
+                  BoxDecoration(
+                color:
+                    widget
+                        .mutedColor
+                        .withOpacity(
+                  .4,
+                ),
+                borderRadius:
+                    BorderRadius
+                        .circular(
+                  99,
+                ),
               ),
             ),
+
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 10, 12),
+              padding:
+                  const EdgeInsets
+                      .fromLTRB(
+                20,
+                12,
+                10,
+                12,
+              ),
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(
+                    child:
+                        Text(
                       'Comments',
-                      style: TextStyle(
-                        color: widget.textColor,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
+                      style:
+                          TextStyle(
+                        color:
+                            widget
+                                .textColor,
+                        fontSize:
+                            20,
+                        fontWeight:
+                            FontWeight
+                                .w800,
                       ),
                     ),
                   ),
+
                   IconButton(
                     onPressed: () {
-                      Navigator.of(context).pop(_countComments(_comments));
+                      Navigator.of(
+                        context,
+                      ).pop(
+                        _comments.length,
+                      );
                     },
-                    icon: Icon(Icons.close_rounded, color: widget.textColor),
+                    icon:
+                        Icon(
+                      Icons
+                          .close_rounded,
+                      color:
+                          widget
+                              .textColor,
+                    ),
                   ),
                 ],
               ),
             ),
-            Divider(height: 1, color: widget.dividerColor),
-            Expanded(
-              child: _comments.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No comments yet',
-                        style: TextStyle(color: widget.mutedColor),
-                      ),
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _comments.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 16),
-                      itemBuilder: (_, index) => _buildComment(_comments[index]),
-                    ),
+
+            Divider(
+              height: 1,
+              color:
+                  widget
+                      .dividerColor,
             ),
-            if (_replyTo != null)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
-                color: widget.surfaceColor,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Replying to ${_displayName(
-                          _replyTo!['author'] is Map
-                              ? Map<String, dynamic>.from(_replyTo!['author'])
-                              : <String, dynamic>{},
-                        )}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: widget.mutedColor,
-                          fontSize: 12,
+
+            // ==================================================
+            // COMMENTS LIST
+            // ==================================================
+
+            Expanded(
+              child:
+                  _comments.isEmpty
+                      ? Center(
+                          child:
+                              Text(
+                            'No comments yet',
+                            style:
+                                TextStyle(
+                              color:
+                                  widget
+                                      .mutedColor,
+                            ),
+                          ),
+                        )
+                      : ListView
+                          .separated(
+                          padding:
+                              const EdgeInsets
+                                  .all(
+                            16,
+                          ),
+                          itemCount:
+                              _comments
+                                  .length,
+                          separatorBuilder:
+                              (
+                            _,
+                            __,
+                          ) =>
+                                  const SizedBox(
+                            height: 16,
+                          ),
+                          itemBuilder:
+                              (
+                            _,
+                            index,
+                          ) {
+                            return _buildComment(
+                              _comments[
+                                  index],
+                            );
+                          },
                         ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Cancel reply',
-                      onPressed: () {
-                        setState(() {
-                          _replyTo = null;
-                        });
-                      },
-                      icon: Icon(
-                        Icons.close,
-                        size: 18,
-                        color: widget.mutedColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            ),
+
+            // ==================================================
+            // COMMENT COMPOSER
+            // ==================================================
+
             Container(
-              padding: EdgeInsets.fromLTRB(
+              padding:
+                  EdgeInsets.fromLTRB(
                 14,
                 10,
                 14,
-                MediaQuery.of(context).viewInsets.bottom + 10,
+                MediaQuery.of(
+                      context,
+                    ).viewInsets.bottom +
+                    10,
               ),
-              decoration: BoxDecoration(
-                color: widget.surfaceColor,
-                border: Border(top: BorderSide(color: widget.dividerColor)),
+              decoration:
+                  BoxDecoration(
+                color:
+                    widget
+                        .surfaceColor,
+                border:
+                    Border(
+                  top:
+                      BorderSide(
+                    color:
+                        widget
+                            .dividerColor,
+                  ),
+                ),
               ),
-              child: Row(
+              child:
+                  Row(
                 children: [
                   Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      minLines: 1,
-                      maxLines: 4,
-                      textInputAction: TextInputAction.newline,
-                      style: TextStyle(color: widget.textColor),
-                      decoration: InputDecoration(
-                        hintText: _replyTo == null
-                            ? 'Write a comment...'
-                            : 'Write a reply...',
-                        hintStyle: TextStyle(color: widget.mutedColor),
-                        filled: true,
-                        fillColor: widget.composerColor,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(22),
-                          borderSide: BorderSide.none,
+                    child:
+                        TextField(
+                      controller:
+                          _controller,
+                      minLines:
+                          1,
+                      maxLines:
+                          4,
+                      textInputAction:
+                          TextInputAction
+                              .newline,
+                      style:
+                          TextStyle(
+                        color:
+                            widget
+                                .textColor,
+                      ),
+                      decoration:
+                          InputDecoration(
+                        hintText:
+                            'Write a comment...',
+                        hintStyle:
+                            TextStyle(
+                          color:
+                              widget
+                                  .mutedColor,
                         ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 11,
+                        filled:
+                            true,
+                        fillColor:
+                            widget
+                                .composerColor,
+                        border:
+                            OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius
+                                  .circular(
+                            22,
+                          ),
+                          borderSide:
+                              BorderSide
+                                  .none,
+                        ),
+                        contentPadding:
+                            const EdgeInsets
+                                .symmetric(
+                          horizontal:
+                              16,
+                          vertical:
+                              11,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+
+                  const SizedBox(
+                    width: 8,
+                  ),
+
                   IconButton(
-                    onPressed: _sending ? null : _sendComment,
-                    style: IconButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF2D78),
-                      foregroundColor: Colors.white,
+                    onPressed:
+                        _sending
+                            ? null
+                            : _sendComment,
+                    style:
+                        IconButton
+                            .styleFrom(
+                      backgroundColor:
+                          const Color(
+                        0xFFFF2D78,
+                      ),
+                      foregroundColor:
+                          Colors.white,
                     ),
-                    icon: _sending
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.arrow_upward_rounded),
+                    icon:
+                        _sending
+                            ? const SizedBox(
+                                width:
+                                    18,
+                                height:
+                                    18,
+                                child:
+                                    CircularProgressIndicator(
+                                  strokeWidth:
+                                      2,
+                                  color:
+                                      Colors.white,
+                                ),
+                              )
+                            : const Icon(
+                                Icons
+                                    .arrow_upward_rounded,
+                              ),
                   ),
                 ],
               ),

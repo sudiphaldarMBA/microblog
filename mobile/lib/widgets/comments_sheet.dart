@@ -184,9 +184,10 @@ class _CommentsSheetState extends State<CommentsSheet> {
 
       if (_editingComment != null) {
         result = await ApiService.updateComment(
-          commentId: _idString(_editingComment!['_id'])!,
-          content: text,
-        );
+  commentId: _idString(_editingComment!['_id'])!,
+  content: text,
+  postId: widget.postId,
+);
       } else {
         final parentId = _replyingToComment == null
             ? null
@@ -232,8 +233,9 @@ class _CommentsSheetState extends State<CommentsSheet> {
   Future<void> _deleteComment(String commentId) async {
     try {
       final result = await ApiService.deleteComment(
-        commentId: commentId,
-      );
+  commentId: commentId,
+  postId: widget.postId,
+);
 
       if (!mounted) return;
 

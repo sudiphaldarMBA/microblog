@@ -1637,83 +1637,85 @@ Future<void> _showPhotoCaptionDialog({
                       CrossAxisAlignment.start,
                   children: [
                     Row(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
                       children: [
-                        Flexible(
-                          child: Text(
-                            displayName,
-                            maxLines: 1,
-                            overflow:
-                                TextOverflow
-                                    .ellipsis,
-                            style:
-                                TextStyle(
-                              color:
-                                  _text,
-                              fontSize:
-                                  14,
-                              fontWeight:
-                                  FontWeight
-                                      .w800,
-                            ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              // Full name
+                              Text(
+                                displayName,
+                                maxLines: 1,
+                                overflow:
+                                    TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: _text,
+                                  fontSize: 15.5,
+                                  fontWeight:
+                                      FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              // Username + time
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      "@$username",
+                                      maxLines: 1,
+                                      overflow:
+                                          TextOverflow
+                                              .ellipsis,
+                                      style: TextStyle(
+                                        color: _muted,
+                                        fontSize: 13.5,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    "•",
+                                    style: TextStyle(
+                                      color: _muted,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _timeAgo(
+                                      post["createdAt"],
+                                    ),
+                                    style: TextStyle(
+                                      color: _muted,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(
-                          width: 5,
-                        ),
-                        Flexible(
-                          child: Text(
-                            "@$username",
-                            maxLines: 1,
-                            overflow:
-                                TextOverflow
-                                    .ellipsis,
-                            style:
-                                TextStyle(
-                              color:
-                                  _muted,
-                              fontSize:
-                                  13,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(
-                          width: 5,
-                        ),
-                        Text(
-                          "· ${_timeAgo(post["createdAt"])}",
-                          style:
-                              TextStyle(
-                            color:
-                                _muted,
-                            fontSize:
-                                12,
-                          ),
-                        ),
-                        const Spacer(),
                         if (isMine)
                           GestureDetector(
                             behavior:
-                                HitTestBehavior
-                                    .opaque,
+                                HitTestBehavior.opaque,
                             onTap: () =>
                                 _confirmDeletePost(
                               postId,
-                              isRepost:
-                                  isRepost,
+                              isRepost: isRepost,
                             ),
                             child: Padding(
                               padding:
-                                  const EdgeInsets
-                                      .only(
+                                  const EdgeInsets.only(
                                 left: 8,
-                                bottom: 2,
+                                top: 2,
                               ),
                               child: Icon(
-                                CupertinoIcons
-                                    .ellipsis,
+                                CupertinoIcons.ellipsis,
                                 size: 20,
-                                color:
-                                    _muted,
+                                color: _muted,
                               ),
                             ),
                           ),
