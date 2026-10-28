@@ -36,12 +36,13 @@ dependencies:
   cupertino_icons: ^1.0.8
   http: ^1.6.0
   shared_preferences: ^2.5.5
-  share_plus: ^13.3.0
+  share_plus: ^13.3.1
   image_picker: ^1.2.3
-  video_player: ^2.14.0
+  video_player: ^2.14.1
   file_picker: ^13.1.0
   image_cropper: ^12.2.1
   url_launcher: ^6.3.3
+  path_provider: ^2.1.6
 
 dev_dependencies:
   flutter_test:

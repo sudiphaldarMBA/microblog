@@ -521,6 +521,39 @@ class ApiService {
   }
 
   // ============================================================
+  // RECORD POST VIEW
+  // ============================================================
+
+  static Future<Map<String, dynamic>> recordView({
+    required String postId,
+  }) async {
+    if (postId.trim().isEmpty) {
+      return {
+        'success': false,
+        'message': 'Post ID is required',
+      };
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/posts/$postId/view'),
+        headers: await _headers(),
+      );
+
+      await _handleUnauthorized(response);
+
+      return _decode(response);
+    } catch (error) {
+      debugPrint('ApiService recordView error: $error');
+
+      return {
+        'success': false,
+        'message': error.toString(),
+      };
+    }
+  }
+
+  // ============================================================
   // COMMENTS AND NESTED REPLIES
   // ============================================================
 
