@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../services/api_service.dart';
 import '../home/home_video_player.dart';
+import 'package:flutter/cupertino.dart';
 
 class BookmarkScreen extends StatefulWidget {
   const BookmarkScreen({super.key});
@@ -1097,8 +1098,8 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                           Expanded(
                             child: _actionButton(
                               icon: isLiked
-                                  ? Icons.favorite_rounded
-                                  : Icons.favorite_border_rounded,
+                                  ? CupertinoIcons.heart_fill
+                                  : CupertinoIcons.heart,
                               count: likeCount,
                               color: isLiked ? _red : _secondary,
                               loading: isLiking,
@@ -1110,7 +1111,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
 
                           Expanded(
                             child: _actionButton(
-                              icon: Icons.mode_comment_outlined,
+                              icon: CupertinoIcons.bubble_left,
                               count: commentCount,
                               color: _secondary,
                               onTap: postId.isEmpty
@@ -1121,7 +1122,8 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
 
                           Expanded(
                             child: _actionButton(
-                              icon: Icons.ios_share_rounded,
+                              icon: CupertinoIcons
+                              .arrowshape_turn_up_right,
                               count: 0,
                               color: _secondary,
                               onTap: () => _sharePost(post),
@@ -1130,7 +1132,8 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
 
                           Expanded(
                             child: _actionButton(
-                              icon: Icons.bookmark_rounded,
+                              icon: CupertinoIcons
+                                  .bookmark_fill,
                               count: 0,
                               color: _blue,
                               onTap: postId.isEmpty
@@ -1358,7 +1361,9 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
 
             const SizedBox(width: 8),
 
-            const Icon(Icons.bookmark_rounded, size: 20, color: _blue),
+            const Icon(CupertinoIcons.bookmark_fill, size: 20, color: _blue),
+
+
           ],
         ),
 

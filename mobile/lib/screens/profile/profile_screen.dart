@@ -1813,8 +1813,7 @@ Future<void> _showPhotoCaptionDialog({
                 // Same share icon used on the home feed, for
                 // visual consistency across screens.
                 icon:
-                    CupertinoIcons
-                        .share,
+                    CupertinoIcons.arrowshape_turn_up_right,
                 count: null,
                 onTap: () =>
                     _sharePost(

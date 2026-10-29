@@ -1860,25 +1860,18 @@ const SizedBox(height: 8),
                       children: [
                         // LIKE
                         _actionButton(
-                          icon: liked
-                              ? Icons.favorite_rounded
-                              : Icons
-                                  .favorite_outline_rounded,
-                          count: likes,
-                          color:
-                              liked ? _red : _muted,
-                          active: liked,
-                          loading:
-                              _likeLoading.contains(id),
-                          onTap: () {
-                            _toggleLike(id);
-                          },
-                        ),
+  icon: liked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+  count: likes,
+  color: liked ? _red : _muted,
+  active: liked,
+  loading: _likeLoading.contains(id),
+  onTap: () {
+    _toggleLike(id);
+  },
+),
 
                         // COMMENT
-                        // Same comment icon used on the profile
-                        // screen, for visual consistency across
-                        // screens.
+                        
                         _actionButton(
                           icon: CupertinoIcons.bubble_left,
                           count: comments,

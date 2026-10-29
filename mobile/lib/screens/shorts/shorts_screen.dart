@@ -438,7 +438,7 @@ class _ShortPageState extends State<_ShortPage> {
   VideoPlayerController? _controller;
   bool _initializing = true;
   bool _failed = false;
-  bool _isMuted = true;
+  bool _isMuted = false;
 
   @override
   void initState() {
@@ -507,6 +507,7 @@ Future<void> _initializeVideo() async {
     await controller.initialize();
     await controller.setLooping(true);
     await controller.setVolume(_isMuted ? 0.0 : 1.0);
+    await controller.play();
 
     if (!mounted) {
       await controller.dispose();
@@ -625,44 +626,39 @@ Future<void> _initializeVideo() async {
 
 
 Positioned(
-  right: 17,
+  right: 23,
   bottom: 330,
-  child: Material(
-    color: Colors.black54,
-    shape: const CircleBorder(),
-    child: IconButton(
-      tooltip: _isMuted ? 'Unmute video' : 'Mute video',
-      icon: Icon(
+  child: GestureDetector(
+    onTap: () async {
+      final controller = _controller;
+      if (controller == null || !controller.value.isInitialized) {
+        return;
+      }
+
+      final newMutedState = !_isMuted;
+
+      try {
+        await controller.setVolume(newMutedState ? 0.0 : 1.0);
+
+        if (!mounted) return;
+
+        setState(() {
+          _isMuted = newMutedState;
+        });
+      } catch (error) {
+        debugPrint('Unable to change video volume: $error');
+      }
+    },
+    child: CircleAvatar(
+      radius: 18,
+      backgroundColor: Colors.black54,
+      child: Icon(
         _isMuted
             ? CupertinoIcons.speaker_slash_fill
             : CupertinoIcons.speaker_2_fill,
         color: Colors.white,
-        size: 27,
+        size: 18,
       ),
-      onPressed: () async {
-        final controller = _controller;
-
-        if (controller == null ||
-            !controller.value.isInitialized) {
-          return;
-        }
-
-        final newMutedState = !_isMuted;
-
-        try {
-          await controller.setVolume(
-            newMutedState ? 0.0 : 1.0,
-          );
-
-          if (!mounted) return;
-
-          setState(() {
-            _isMuted = newMutedState;
-          });
-        } catch (error) {
-          debugPrint('Unable to change video volume: $error');
-        }
-      },
     ),
   ),
 ),
@@ -767,7 +763,7 @@ Positioned(
                 ),
                 const SizedBox(height: 15),
                 _ShortAction(
-                  icon: CupertinoIcons.chat_bubble,
+                  icon: CupertinoIcons.bubble_left,
                   label: _formatCount(widget.commentsCount),
                   onTap: widget.onComment,
                 ),
