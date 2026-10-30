@@ -24,7 +24,8 @@ const userSchema = new mongoose.Schema(
       trim: true,
       minlength: 3,
       maxlength: 30,
-      lowercase: true,
+      // Stored exactly as typed (e.g. "M_Haldar"). Uniqueness is
+      // checked case-insensitively in authController.
       unique: true,
     },
 
@@ -104,6 +105,15 @@ const userSchema = new mongoose.Schema(
     },
 
     // ==========================================
+    // DATE OF BIRTH
+    // ==========================================
+
+    dateOfBirth: {
+      type: Date,
+      default: null,
+    },
+
+    // ==========================================
     // FOLLOWERS
     // ==========================================
 
@@ -124,6 +134,17 @@ const userSchema = new mongoose.Schema(
         ref: "User",
       },
     ],
+    isPrivate: {
+  type: Boolean,
+  default: false,
+},
+
+pendingFollowRequests: [
+  {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  },
+],
   },
   {
     timestamps: true,

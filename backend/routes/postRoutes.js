@@ -56,6 +56,18 @@ router.post(
   postController.toggleLike
 );
 
+router.post(
+  '/:postId/view',
+  authMiddleware,
+  postController.recordView
+);
+router.get('/view-test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Post routes are loaded correctly'
+  });
+});
+
 // CREATE COMMENT
 router.post(
   '/:postId/comments',

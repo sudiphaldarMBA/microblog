@@ -22,9 +22,15 @@ const postSchema = new mongoose.Schema(
     },
 
     video: {
-      type: String,
-      default: '',
-    },
+  type: String,
+  default: '',
+},
+
+viewsCount: {
+  type: Number,
+  default: 0,
+  min: 0,
+},
     
     location: {
       type: String,

@@ -60,6 +60,14 @@ app.use(
   "/api/posts",
   postRoutes
 );
+app.get("/api/view-route-check", (req, res) => {
+  res.json({
+    success: true,
+    message: "Latest backend deployment is active",
+    viewRouteFileLoaded: true
+  });
+});
+app.use("/api/users", require("./routes/userRoutes"));
 
 // ==========================================================
 // START SERVER

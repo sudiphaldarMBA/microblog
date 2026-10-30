@@ -7,6 +7,17 @@ const User = require("../models/User");
 // HELPER: BUILD USER RESPONSE
 // ==========================================================
 
+// Escape user input before using it inside a RegExp.
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Case-insensitive exact match, so "M_Haldar" and "m_haldar" count
+// as the same username even though the typed case is preserved.
+function usernameMatcher(username) {
+  return new RegExp(`^${escapeRegex(username)}$`, "i");
+}
+
 function buildUserResponse(user) {
   const displayName =
     user.displayName &&
@@ -33,6 +44,11 @@ function buildUserResponse(user) {
 
     website: user.website || "",
 
+    // "YYYY-MM-DD" (no time zone), or "" when not set.
+    dateOfBirth: user.dateOfBirth
+      ? user.dateOfBirth.toISOString().slice(0, 10)
+      : "",
+
     followersCount: Array.isArray(user.followers)
         ? user.followers.length
         : 0,
@@ -40,6 +56,8 @@ function buildUserResponse(user) {
     followingCount: Array.isArray(user.following)
         ? user.following.length
         : 0,
+
+    isPrivate: Boolean(user.isPrivate),
 
     createdAt: user.createdAt,
   };
@@ -82,8 +100,9 @@ exports.register = async (req, res) => {
     const trimmedDisplayName =
       displayName.toString().trim();
 
+    // Keep the username exactly as typed (case preserved).
     const normalizedUsername =
-      username.toString().trim().toLowerCase();
+      username.toString().trim();
 
     const normalizedEmail =
       email.toString().trim().toLowerCase();
@@ -163,7 +182,7 @@ exports.register = async (req, res) => {
 
     const existingUsername =
       await User.findOne({
-        username: normalizedUsername,
+        username: usernameMatcher(normalizedUsername),
       });
 
     if (existingUsername) {
@@ -439,16 +458,18 @@ exports.getMe = async (req, res) => {
 exports.updateProfile = async (req, res) => {
   try {
     const {
-      displayName,
-      username,
-      email,
-      bio,
-      avatar,
-      coverPhoto,
-      location,
-      website,
-    } = req.body;
-
+  displayName,
+  username,
+  email,
+  bio,
+  avatar,
+  coverPhoto,
+  location,
+  website,
+  dateOfBirth,
+  isPrivate,
+} = req.body;
+    console.log('DOB RECEIVED BY BACKEND:', req.body.dateOfBirth);
     // --------------------------------------------------------
     // FIND CURRENT USER
     // --------------------------------------------------------
@@ -504,8 +525,7 @@ exports.updateProfile = async (req, res) => {
       const normalizedUsername =
         username
           .toString()
-          .trim()
-          .toLowerCase();
+          .trim();
 
       if (normalizedUsername.length < 3) {
         return res.status(400).json({
@@ -526,7 +546,7 @@ exports.updateProfile = async (req, res) => {
       const existingUser =
         await User.findOne({
           username:
-            normalizedUsername,
+            usernameMatcher(normalizedUsername),
 
           _id: {
             $ne: req.userId,
@@ -675,10 +695,80 @@ exports.updateProfile = async (req, res) => {
     }
 
     // --------------------------------------------------------
+    // DATE OF BIRTH ("YYYY-MM-DD", or "" to clear)
+    // --------------------------------------------------------
+
+    if (dateOfBirth !== undefined) {
+      const dobText =
+        dateOfBirth === null
+          ? ""
+          : dateOfBirth
+              .toString()
+              .trim();
+
+      if (dobText === "") {
+        user.dateOfBirth = null;
+      } else {
+        const dob = /^\d{4}-\d{2}-\d{2}$/.test(dobText)
+          ? new Date(`${dobText}T00:00:00.000Z`)
+          : new Date(dobText);
+
+        if (Number.isNaN(dob.getTime())) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Invalid date of birth",
+          });
+        }
+
+        if (
+          dob > new Date() ||
+          dob.getUTCFullYear() < 1900
+        ) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Date of birth is out of range",
+          });
+        }
+
+        user.dateOfBirth = dob;
+        console.log('DOB BEFORE SAVE:', user.dateOfBirth);
+      }
+    }
+
+    // --------------------------------------------------------
+// ACCOUNT PRIVACY
+// --------------------------------------------------------
+
+if (isPrivate !== undefined) {
+  if (typeof isPrivate !== "boolean") {
+    return res.status(400).json({
+      success: false,
+      message: "isPrivate must be true or false",
+    });
+  }
+
+  user.isPrivate = isPrivate;
+
+  // If the account becomes public, pending approval is no
+  // longer necessary. Users can follow the public account.
+  if (isPrivate === false) {
+    user.pendingFollowRequests = [];
+  }
+}
+    // --------------------------------------------------------
     // SAVE
     // --------------------------------------------------------
 
     await user.save();
+    console.log('DOB AFTER SAVE:', user.dateOfBirth);
+console.log(
+  'DOB AFTER SAVE ISO:',
+  user.dateOfBirth instanceof Date && !Number.isNaN(user.dateOfBirth.getTime())
+    ? user.dateOfBirth.toISOString()
+    : null
+);
 
     // --------------------------------------------------------
     // RESPONSE
