@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 import 'dart:io';
 
@@ -129,8 +128,9 @@ class _ShortsScreenState extends State<ShortsScreen> {
 
       if (serverCount != null) {
         setState(() {
-          final currentIndex =
-              _shorts.indexWhere((item) => _postId(item) == id);
+          final currentIndex = _shorts.indexWhere(
+            (item) => _postId(item) == id,
+          );
 
           if (currentIndex != -1) {
             _shorts[currentIndex]['viewsCount'] = _count(serverCount);
@@ -165,8 +165,8 @@ class _ShortsScreenState extends State<ShortsScreen> {
       setState(() {
         final wasLiked = post['likedByMe'] == true;
         post['likedByMe'] = !wasLiked;
-        post['likesCount'] =
-            (_count(post['likesCount']) + (wasLiked ? -1 : 1)).clamp(0, 1 << 30);
+        post['likesCount'] = (_count(post['likesCount']) + (wasLiked ? -1 : 1))
+            .clamp(0, 1 << 30);
       });
     } catch (error) {
       _showMessage('Unable to update like');
@@ -241,10 +241,7 @@ class _ShortsScreenState extends State<ShortsScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          duration: const Duration(seconds: 2),
-        ),
+        SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
       );
   }
 
@@ -300,9 +297,7 @@ class _ShortsScreenState extends State<ShortsScreen> {
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(
-        child: CircularProgressIndicator(color: _accent),
-      );
+      return const Center(child: CircularProgressIndicator(color: _accent));
     }
 
     if (_error != null) {
@@ -331,7 +326,6 @@ class _ShortsScreenState extends State<ShortsScreen> {
       itemCount: _shorts.length,
       onPageChanged: (index) {
         setState(() => _activeIndex = index);
-        _recordView(index);
       },
       itemBuilder: (context, index) {
         final post = _shorts[index];
@@ -351,6 +345,7 @@ class _ShortsScreenState extends State<ShortsScreen> {
           onComment: () => _openComments(post),
           onShare: () => _sharePost(post),
           onBookmark: () => _toggleBookmark(index),
+          onPlaybackStarted: () => _recordView(index),
         );
       },
     );
@@ -387,10 +382,7 @@ class _ShortsScreenState extends State<ShortsScreen> {
               style: const TextStyle(color: Colors.white70, height: 1.4),
             ),
             const SizedBox(height: 18),
-            FilledButton(
-              onPressed: onPressed,
-              child: Text(buttonText),
-            ),
+            FilledButton(onPressed: onPressed, child: Text(buttonText)),
           ],
         ),
       ),
@@ -412,6 +404,7 @@ class _ShortPage extends StatefulWidget {
   final VoidCallback onComment;
   final VoidCallback onShare;
   final VoidCallback onBookmark;
+  final VoidCallback onPlaybackStarted;
 
   const _ShortPage({
     super.key,
@@ -428,6 +421,7 @@ class _ShortPage extends StatefulWidget {
     required this.onComment,
     required this.onShare,
     required this.onBookmark,
+    required this.onPlaybackStarted,
   });
 
   @override
@@ -455,103 +449,107 @@ class _ShortPageState extends State<_ShortPage> {
     }
   }
 
-  
+  Future<void> _initializeVideo() async {
+    VideoPlayerController? controller;
 
-Future<void> _initializeVideo() async {
-  VideoPlayerController? controller;
+    try {
+      final String value = widget.post['video']?.toString().trim() ?? '';
 
-  try {
-    final String value = widget.post['video']?.toString().trim() ?? '';
-
-    if (value.isEmpty) {
-      throw Exception('Video data is empty');
-    }
-
-    // Match the video-source handling used by HomeVideoPlayer.
-    if (value.startsWith('data:video') || !value.startsWith('http')) {
-      final String base64Str =
-          value.contains(',') ? value.split(',').last : value;
-
-      final bytes = base64Decode(base64Str);
-
-      final Directory tempDir = Directory.systemTemp;
-      final String tempPath = '${tempDir.path}/microblog_videos';
-      final Directory videoFolder = Directory(tempPath);
-
-      if (!await videoFolder.exists()) {
-        await videoFolder.create(recursive: true);
+      if (value.isEmpty) {
+        throw Exception('Video data is empty');
       }
 
-      final String id =
-          (widget.post['_id'] ?? widget.post['id'] ?? 'short').toString();
+      // Match the video-source handling used by HomeVideoPlayer.
+      if (value.startsWith('data:video') || !value.startsWith('http')) {
+        final String base64Str = value.contains(',')
+            ? value.split(',').last
+            : value;
 
-      final File videoFile = File(
-        '$tempPath/short_${id}_${DateTime.now().microsecondsSinceEpoch}.mp4',
-      );
+        final bytes = base64Decode(base64Str);
 
-      await videoFile.writeAsBytes(bytes, flush: true);
+        final Directory tempDir = Directory.systemTemp;
+        final String tempPath = '${tempDir.path}/microblog_videos';
+        final Directory videoFolder = Directory(tempPath);
 
-      controller = VideoPlayerController.file(videoFile);
-    } else {
-      // HTTP and HTTPS video URLs.
-      final Uri? videoUri = Uri.tryParse(value);
+        if (!await videoFolder.exists()) {
+          await videoFolder.create(recursive: true);
+        }
 
-      if (videoUri == null ||
-          (videoUri.scheme != 'http' && videoUri.scheme != 'https')) {
-        throw Exception('Invalid video URL');
+        final String id = (widget.post['_id'] ?? widget.post['id'] ?? 'short')
+            .toString();
+
+        final File videoFile = File(
+          '$tempPath/short_${id}_${DateTime.now().microsecondsSinceEpoch}.mp4',
+        );
+
+        await videoFile.writeAsBytes(bytes, flush: true);
+
+        controller = VideoPlayerController.file(videoFile);
+      } else {
+        // HTTP and HTTPS video URLs.
+        final Uri? videoUri = Uri.tryParse(value);
+
+        if (videoUri == null ||
+            (videoUri.scheme != 'http' && videoUri.scheme != 'https')) {
+          throw Exception('Invalid video URL');
+        }
+
+        controller = VideoPlayerController.networkUrl(videoUri);
       }
 
-      controller = VideoPlayerController.networkUrl(videoUri);
-    }
+      await controller.initialize();
+      await controller.setLooping(true);
+      await controller.setVolume(_isMuted ? 0.0 : 1.0);
+      await controller.play();
 
-    await controller.initialize();
-    await controller.setLooping(true);
-    await controller.setVolume(_isMuted ? 0.0 : 1.0);
-    await controller.play();
-
-    if (!mounted) {
-      await controller.dispose();
-      return;
-    }
-
-    _controller = controller;
-
-    setState(() {
-      _initializing = false;
-      _failed = false;
-    });
-
-    // Play only the currently visible Short.
-    await _syncPlayback();
-  } catch (error) {
-    debugPrint('Short video initialization error: $error');
-
-    if (controller != null) {
-      if (identical(controller, _controller)) {
-        _controller = null;
+      if (!mounted) {
+        await controller.dispose();
+        return;
       }
 
-      await controller.dispose();
-    }
+      _controller = controller;
 
-    if (mounted) {
       setState(() {
         _initializing = false;
-        _failed = true;
+        _failed = false;
       });
+
+      // Play only the currently visible Short.
+      await _syncPlayback();
+    } catch (error) {
+      debugPrint('Short video initialization error: $error');
+
+      if (controller != null) {
+        if (identical(controller, _controller)) {
+          _controller = null;
+        }
+
+        await controller.dispose();
+      }
+
+      if (mounted) {
+        setState(() {
+          _initializing = false;
+          _failed = true;
+        });
+      }
     }
   }
-}
-
 
   Future<void> _syncPlayback() async {
     final controller = _controller;
 
-    if (controller == null || !controller.value.isInitialized) return;
+    if (controller == null || !controller.value.isInitialized) {
+      return;
+    }
 
     try {
       if (widget.isActive) {
         await controller.play();
+
+        if (mounted && controller.value.isPlaying) {
+          widget.onPlaybackStarted();
+        }
       } else {
         await controller.pause();
       }
@@ -602,9 +600,7 @@ Future<void> _initializeVideo() async {
             ),
           )
         else if (_initializing)
-          const Center(
-            child: CircularProgressIndicator(color: Colors.white),
-          )
+          const Center(child: CircularProgressIndicator(color: Colors.white))
         else
           Center(
             child: Column(
@@ -624,45 +620,43 @@ Future<void> _initializeVideo() async {
             ),
           ),
 
+        Positioned(
+          right: 23,
+          bottom: 330,
+          child: GestureDetector(
+            onTap: () async {
+              final controller = _controller;
+              if (controller == null || !controller.value.isInitialized) {
+                return;
+              }
 
-Positioned(
-  right: 23,
-  bottom: 330,
-  child: GestureDetector(
-    onTap: () async {
-      final controller = _controller;
-      if (controller == null || !controller.value.isInitialized) {
-        return;
-      }
+              final newMutedState = !_isMuted;
 
-      final newMutedState = !_isMuted;
+              try {
+                await controller.setVolume(newMutedState ? 0.0 : 1.0);
 
-      try {
-        await controller.setVolume(newMutedState ? 0.0 : 1.0);
+                if (!mounted) return;
 
-        if (!mounted) return;
-
-        setState(() {
-          _isMuted = newMutedState;
-        });
-      } catch (error) {
-        debugPrint('Unable to change video volume: $error');
-      }
-    },
-    child: CircleAvatar(
-      radius: 18,
-      backgroundColor: Colors.black54,
-      child: Icon(
-        _isMuted
-            ? CupertinoIcons.speaker_slash_fill
-            : CupertinoIcons.speaker_2_fill,
-        color: Colors.white,
-        size: 18,
-      ),
-    ),
-  ),
-),
-
+                setState(() {
+                  _isMuted = newMutedState;
+                });
+              } catch (error) {
+                debugPrint('Unable to change video volume: $error');
+              }
+            },
+            child: CircleAvatar(
+              radius: 18,
+              backgroundColor: Colors.black54,
+              child: Icon(
+                _isMuted
+                    ? CupertinoIcons.speaker_slash_fill
+                    : CupertinoIcons.speaker_2_fill,
+                color: Colors.white,
+                size: 18,
+              ),
+            ),
+          ),
+        ),
 
         if (controller != null &&
             controller.value.isInitialized &&

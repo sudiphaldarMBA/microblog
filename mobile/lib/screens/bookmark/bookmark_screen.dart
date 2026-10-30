@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../services/api_service.dart';
 import '../home/home_video_player.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 
 class BookmarkScreen extends StatefulWidget {
   const BookmarkScreen({super.key});
@@ -52,6 +53,12 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
   final Map<String, int> _likeCounts = {};
 
   final Set<String> _likingPosts = {};
+
+  final Set<String> _viewedPostIds = {};
+
+  final Set<String> _recordingPostIds = {};
+
+  final Map<String, int> _viewCounts = {};
 
   // ============================================================
   // INIT
@@ -158,6 +165,44 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
       });
 
       _showMessage(error.toString().replaceFirst("Exception: ", ""));
+    }
+  }
+
+  Future<void> _recordPostView(String postId) async {
+    if (postId.isEmpty ||
+        _viewedPostIds.contains(postId) ||
+        _recordingPostIds.contains(postId)) {
+      return;
+    }
+
+    _recordingPostIds.add(postId);
+
+    try {
+      final result = await ApiService.recordView(postId: postId);
+
+      if (!mounted || result['success'] != true) return;
+
+      final data = result['data'];
+      final count = data is Map ? data['viewsCount'] : null;
+
+      if (count is num) {
+        setState(() {
+          _viewCounts[postId] = count.toInt();
+
+          for (final item in _savedPosts) {
+            if (item is Map && item['_id']?.toString() == postId) {
+              item['viewsCount'] = count.toInt();
+              break;
+            }
+          }
+        });
+      }
+
+      _viewedPostIds.add(postId);
+    } catch (error) {
+      debugPrint('Unable to record Bookmark view: $error');
+    } finally {
+      _recordingPostIds.remove(postId);
     }
   }
 
@@ -899,6 +944,11 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
 
   Widget _buildPost(dynamic post) {
     final String postId = post["_id"]?.toString() ?? "";
+    final int viewsCount =
+        _viewCounts[postId] ??
+        (post['viewsCount'] is num
+            ? (post['viewsCount'] as num).toInt()
+            : int.tryParse(post['viewsCount']?.toString() ?? '') ?? 0);
 
     final rawAuthor = post["author"];
 
@@ -946,213 +996,231 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
 
     final String postTime = _timeAgo(post["createdAt"]);
 
-    return Container(
-      color: _surface,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 11),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _avatar(image: author["avatar"], name: displayName, radius: 21),
+    return VisibilityDetector(
+      key: Key('bookmark-view-$postId'),
+      onVisibilityChanged: (info) {
+        if (info.visibleFraction >= 0.15) {
+          _recordPostView(postId);
+        }
+      },
+      child: Container(
+        color: _surface,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 11),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _avatar(
+                    image: author["avatar"],
+                    name: displayName,
+                    radius: 21,
+                  ),
 
-                const SizedBox(width: 11),
+                  const SizedBox(width: 11),
 
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // ------------------------------------------------
-                      // AUTHOR ROW
-                      // ------------------------------------------------
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  displayName,
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                  style: TextStyle(
-                                    color: _text,
-                                    fontSize: 15.5,
-                                    fontWeight: FontWeight.w700,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // ------------------------------------------------
+                        // AUTHOR ROW
+                        // ------------------------------------------------
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    displayName,
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                    style: TextStyle(
+                                      color: _text,
+                                      fontSize: 15.5,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
-                                ),
 
-                                const SizedBox(height: 2),
+                                  const SizedBox(height: 2),
 
-                                Row(
-                                  children: [
-                                    if (username.isNotEmpty)
-                                      Flexible(
-                                        child: Text(
-                                          "@$username",
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: _secondary,
-                                            fontSize: 13.5,
+                                  Row(
+                                    children: [
+                                      if (username.isNotEmpty)
+                                        Flexible(
+                                          child: Text(
+                                            "@$username",
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: _secondary,
+                                              fontSize: 13.5,
+                                            ),
                                           ),
                                         ),
-                                      ),
 
-                                    if (username.isNotEmpty &&
-                                        postTime.isNotEmpty) ...[
-                                      const SizedBox(width: 6),
+                                      if (username.isNotEmpty &&
+                                          postTime.isNotEmpty) ...[
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          "•",
+                                          style: TextStyle(
+                                            color: _secondary,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                      ],
+
                                       Text(
-                                        "•",
+                                        postTime,
                                         style: TextStyle(
                                           color: _secondary,
                                           fontSize: 13,
                                         ),
                                       ),
-                                      const SizedBox(width: 6),
                                     ],
-
-                                    Text(
-                                      postTime,
-                                      style: TextStyle(
-                                        color: _secondary,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          SizedBox(
-                            width: 32,
-                            height: 32,
-                            child: IconButton(
-                              padding: EdgeInsets.zero,
-                              onPressed: postId.isEmpty
-                                  ? null
-                                  : () => _showPostMenu(postId),
-                              icon: Icon(
-                                Icons.more_horiz_rounded,
-                                color: _secondary,
-                                size: 21,
+                                  ),
+                                ],
                               ),
                             ),
-                          ),
-                        ],
-                      ),
 
-                      const SizedBox(height: 8),
-
-                      // ------------------------------------------------
-                      // TEXT
-                      // ------------------------------------------------
-                      if (content.isNotEmpty)
-                        Text(
-                          content,
-                          style: TextStyle(
-                            color: _text,
-                            fontSize: 16,
-                            height: 1.42,
-                          ),
+                            SizedBox(
+                              width: 32,
+                              height: 32,
+                              child: IconButton(
+                                padding: EdgeInsets.zero,
+                                onPressed: postId.isEmpty
+                                    ? null
+                                    : () => _showPostMenu(postId),
+                                icon: Icon(
+                                  Icons.more_horiz_rounded,
+                                  color: _secondary,
+                                  size: 21,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
 
-                      // ------------------------------------------------
-                      // IMAGE
-                      // ------------------------------------------------
-                      if (media.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 10),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: _media(media),
+                        const SizedBox(height: 8),
+
+                        // ------------------------------------------------
+                        // TEXT
+                        // ------------------------------------------------
+                        if (content.isNotEmpty)
+                          Text(
+                            content,
+                            style: TextStyle(
+                              color: _text,
+                              fontSize: 16,
+                              height: 1.42,
+                            ),
                           ),
+
+                        // ------------------------------------------------
+                        // IMAGE
+                        // ------------------------------------------------
+                        if (media.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: _media(media),
+                            ),
+                          ),
+
+                        // ------------------------------------------------
+                        // VIDEO
+                        // ------------------------------------------------
+                        if (videoMedia.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: HomeVideoPlayer(videoData: videoMedia),
+                            ),
+                          ),
+
+                        // ------------------------------------------------
+                        // POLL
+                        // ------------------------------------------------
+                        if (poll != null) _buildPollPreview(poll, postId),
+
+                        const SizedBox(height: 13),
+
+                        // ------------------------------------------------
+                        // ACTION BAR
+                        // ------------------------------------------------
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _actionButton(
+                                icon: isLiked
+                                    ? CupertinoIcons.heart_fill
+                                    : CupertinoIcons.heart,
+                                count: likeCount,
+                                color: isLiked ? _red : _secondary,
+                                loading: isLiking,
+                                onTap: postId.isEmpty
+                                    ? null
+                                    : () => _toggleLike(postId),
+                              ),
+                            ),
+
+                            Expanded(
+                              child: _actionButton(
+                                icon: CupertinoIcons.bubble_left,
+                                count: commentCount,
+                                color: _secondary,
+                                onTap: postId.isEmpty
+                                    ? null
+                                    : () => _openComments(postId),
+                              ),
+                            ),
+
+                            Expanded(
+                              child: _actionButton(
+                                icon: CupertinoIcons.arrowshape_turn_up_right,
+                                count: 0,
+                                color: _secondary,
+                                onTap: () => _sharePost(post),
+                              ),
+                            ),
+
+                            Expanded(
+                              child: _actionButton(
+                                icon: CupertinoIcons.bookmark_fill,
+                                count: 0,
+                                color: _blue,
+                                onTap: postId.isEmpty
+                                    ? null
+                                    : () => _removeBookmark(postId),
+                                showCount: false,
+                              ),
+                            ),
+                            Expanded(
+                              child: _actionButton(
+                                icon: CupertinoIcons.eye,
+                                count: viewsCount,
+                                color: _secondary,
+                                onTap: null,
+                              ),
+                            ),
+                          ],
                         ),
-
-                      // ------------------------------------------------
-                      // VIDEO
-                      // ------------------------------------------------
-                      if (videoMedia.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 10),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: HomeVideoPlayer(videoData: videoMedia),
-                          ),
-                        ),
-
-                      // ------------------------------------------------
-                      // POLL
-                      // ------------------------------------------------
-                      if (poll != null) _buildPollPreview(poll, postId),
-
-                      const SizedBox(height: 13),
-
-                      // ------------------------------------------------
-                      // ACTION BAR
-                      // ------------------------------------------------
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _actionButton(
-                              icon: isLiked
-                                  ? CupertinoIcons.heart_fill
-                                  : CupertinoIcons.heart,
-                              count: likeCount,
-                              color: isLiked ? _red : _secondary,
-                              loading: isLiking,
-                              onTap: postId.isEmpty
-                                  ? null
-                                  : () => _toggleLike(postId),
-                            ),
-                          ),
-
-                          Expanded(
-                            child: _actionButton(
-                              icon: CupertinoIcons.bubble_left,
-                              count: commentCount,
-                              color: _secondary,
-                              onTap: postId.isEmpty
-                                  ? null
-                                  : () => _openComments(postId),
-                            ),
-                          ),
-
-                          Expanded(
-                            child: _actionButton(
-                              icon: CupertinoIcons
-                              .arrowshape_turn_up_right,
-                              count: 0,
-                              color: _secondary,
-                              onTap: () => _sharePost(post),
-                            ),
-                          ),
-
-                          Expanded(
-                            child: _actionButton(
-                              icon: CupertinoIcons
-                                  .bookmark_fill,
-                              count: 0,
-                              color: _blue,
-                              onTap: postId.isEmpty
-                                  ? null
-                                  : () => _removeBookmark(postId),
-                              showCount: false,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
 
-          Divider(height: 1, color: _divider),
-        ],
+            Divider(height: 1, color: _divider),
+          ],
+        ),
       ),
     );
   }
@@ -1362,8 +1430,6 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
             const SizedBox(width: 8),
 
             const Icon(CupertinoIcons.bookmark_fill, size: 20, color: _blue),
-
-
           ],
         ),
 

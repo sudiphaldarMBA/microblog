@@ -524,35 +524,46 @@ class ApiService {
   // RECORD POST VIEW
   // ============================================================
 
-  static Future<Map<String, dynamic>> recordView({
-    required String postId,
-  }) async {
-    if (postId.trim().isEmpty) {
-      return {
-        'success': false,
-        'message': 'Post ID is required',
-      };
+  
+static Future<Map<String, dynamic>> recordView({
+  required String postId,
+}) async {
+  try {
+    debugPrint('========== RECORD VIEW START ==========');
+    debugPrint('Post ID: $postId');
+    debugPrint('API URL: $baseUrl/posts/$postId/view');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/posts/$postId/view'),
+      headers: await _headers(),
+    );
+
+    debugPrint('HTTP STATUS: ${response.statusCode}');
+    debugPrint('HTTP RESPONSE: ${response.body}');
+
+    await _handleUnauthorized(response);
+
+    final dynamic decoded = jsonDecode(response.body);
+
+    if (decoded is Map<String, dynamic>) {
+      debugPrint('DECODED RESULT: $decoded');
+      debugPrint('========== RECORD VIEW END ==========');
+      return decoded;
     }
 
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/posts/$postId/view'),
-        headers: await _headers(),
-      );
+    return {
+      'success': false,
+      'message': 'Unexpected server response',
+    };
+  } catch (error) {
+    debugPrint('RECORD VIEW ERROR: $error');
 
-      await _handleUnauthorized(response);
-
-      return _decode(response);
-    } catch (error) {
-      debugPrint('ApiService recordView error: $error');
-
-      return {
-        'success': false,
-        'message': error.toString(),
-      };
-    }
+    return {
+      'success': false,
+      'message': error.toString(),
+    };
   }
-
+}
   // ============================================================
   // COMMENTS AND NESTED REPLIES
   // ============================================================

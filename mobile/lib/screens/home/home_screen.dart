@@ -19,13 +19,10 @@ import '../settings/settings_screen.dart';
 import 'repost_modal_sheet.dart';
 import 'home_video_player.dart';
 import '../shorts/shorts_screen.dart';
-
-
+import 'package:visibility_detector/visibility_detector.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({
-    super.key,
-  });
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -41,45 +38,28 @@ class _HomeScreenState extends State<HomeScreen> {
   static const Color _red = Color(0xFFF91880);
   static const Color _green = Color(0xFF00BA7C);
 
-  bool get _dark =>
-      Theme.of(context).brightness == Brightness.dark;
+  bool get _dark => Theme.of(context).brightness == Brightness.dark;
 
   Color get _background =>
-      _dark
-          ? const Color(0xFF050505)
-          : const Color(0xFFF7F8FA);
+      _dark ? const Color(0xFF050505) : const Color(0xFFF7F8FA);
 
-  Color get _surface =>
-      _dark
-          ? const Color(0xFF090A0C)
-          : Colors.white;
+  Color get _surface => _dark ? const Color(0xFF090A0C) : Colors.white;
 
-  Color get _text =>
-      _dark
-          ? Colors.white
-          : const Color(0xFF111318);
+  Color get _text => _dark ? Colors.white : const Color(0xFF111318);
 
-  Color get _muted =>
-      _dark
-          ? const Color(0xFF8D939C)
-          : const Color(0xFF69707A);
+  Color get _muted => _dark ? const Color(0xFF8D939C) : const Color(0xFF69707A);
 
   Color get _divider =>
-      _dark
-          ? const Color(0xFF202328)
-          : const Color(0xFFE7E9ED);
+      _dark ? const Color(0xFF202328) : const Color(0xFFE7E9ED);
 
   Color get _composer =>
-      _dark
-          ? const Color(0xFF17191C)
-          : const Color(0xFFF1F3F5);
+      _dark ? const Color(0xFF17191C) : const Color(0xFFF1F3F5);
 
   // ============================================================
   // CONTROLLERS
   // ============================================================
 
-  final ScrollController _scrollController =
-      ScrollController();
+  final ScrollController _scrollController = ScrollController();
 
   // ============================================================
   // STATE
@@ -109,6 +89,10 @@ class _HomeScreenState extends State<HomeScreen> {
   final Map<String, int> _likeCounts = {};
 
   final Map<String, int> _viewCounts = {};
+
+  final Set<String> _viewedPostIds = {};
+
+  final Set<String> _recordingPostIds = {};
 
   // ============================================================
   // BOOKMARK STATE
@@ -156,9 +140,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
 
-    _scrollController.addListener(
-      _handleScroll,
-    );
+    _scrollController.addListener(_handleScroll);
 
     _loadUser();
     _loadPosts();
@@ -170,9 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    _scrollController.removeListener(
-      _handleScroll,
-    );
+    _scrollController.removeListener(_handleScroll);
 
     _scrollController.dispose();
 
@@ -191,13 +171,9 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    final offset =
-        _scrollController.offset;
+    final offset = _scrollController.offset;
 
-    final direction =
-        _scrollController
-            .position
-            .userScrollDirection;
+    final direction = _scrollController.position.userScrollDirection;
 
     if ((offset - _lastScrollOffset).abs() < 2) {
       return;
@@ -209,12 +185,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (offset <= 5) {
       shouldShow = true;
-    } else if (direction ==
-        ScrollDirection.reverse) {
+    } else if (direction == ScrollDirection.reverse) {
       // Feed moving upward.
       shouldShow = false;
-    } else if (direction ==
-        ScrollDirection.forward) {
+    } else if (direction == ScrollDirection.forward) {
       // Feed moving downward.
       shouldShow = true;
     } else {
@@ -225,11 +199,9 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    if (shouldShow !=
-        _showBottomNavigation) {
+    if (shouldShow != _showBottomNavigation) {
       setState(() {
-        _showBottomNavigation =
-            shouldShow;
+        _showBottomNavigation = shouldShow;
       });
     }
   }
@@ -240,8 +212,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadUser() async {
     try {
-      final user =
-          await ApiService.getCurrentUser();
+      final user = await ApiService.getCurrentUser();
 
       if (!mounted) {
         return;
@@ -252,9 +223,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _loadingUser = false;
       });
     } catch (error) {
-      debugPrint(
-        'Home user error: $error',
-      );
+      debugPrint('Home user error: $error');
 
       if (!mounted) {
         return;
@@ -270,17 +239,13 @@ class _HomeScreenState extends State<HomeScreen> {
   // INTEGER HELPER
   // ============================================================
 
-  int _asInt(
-    dynamic value, [
-    int fallback = 0,
-  ]) {
+  int _asInt(dynamic value, [int fallback = 0]) {
     if (value is num) {
       return value.toInt();
     }
 
     if (value is String) {
-      return int.tryParse(value) ??
-          fallback;
+      return int.tryParse(value) ?? fallback;
     }
 
     return fallback;
@@ -292,75 +257,54 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadPosts() async {
     try {
-      final result =
-          await ApiService.getPosts();
+      final result = await ApiService.getPosts();
 
       if (!mounted) {
         return;
       }
 
       if (result['success'] != true) {
-        throw Exception(
-          result['message'] ??
-              'Unable to load posts',
-        );
+        throw Exception(result['message'] ?? 'Unable to load posts');
       }
 
-      final raw =
-          result['data']?['posts'];
+      final raw = result['data']?['posts'];
 
       if (raw is! List) {
-        throw Exception(
-          'Posts data not found',
-        );
+        throw Exception('Posts data not found');
       }
 
-      final likes =
-          <String, int>{};
+      final likes = <String, int>{};
 
-      final comments =
-          <String, int>{};
+      final comments = <String, int>{};
 
-      final reposts =
-          <String, int>{};
+      final reposts = <String, int>{};
 
-      final liked =
-          <String>{};
+      final liked = <String>{};
 
-      final bookmarked =
-          <String>{};
+      final bookmarked = <String>{};
 
-      final views = 
-          <String, int>{};
-      
-      final pollSelections =
-          <String, int>{};
+      final views = <String, int>{};
 
-      final pollCounts =
-          <String, List<int>>{};
+      final pollSelections = <String, int>{};
+
+      final pollCounts = <String, List<int>>{};
 
       for (final item in raw) {
         if (item is! Map) {
           continue;
         }
 
-        final post =
-            Map<String, dynamic>.from(
-          item,
-        );
+        final post = Map<String, dynamic>.from(item);
 
         final id = post['_id']?.toString() ?? '';
 
-if (id.isEmpty) {
-  continue;
-}
+        if (id.isEmpty) {
+          continue;
+        }
 
-views[id] = _asInt(
-  post['viewsCount'] ??
-      post['viewCount'] ??
-      post['views'],
-);
-        
+        views[id] = _asInt(
+          post['viewsCount'] ?? post['viewCount'] ?? post['views'],
+        );
 
         // --------------------------------------------------------
         // LIKES
@@ -368,10 +312,7 @@ views[id] = _asInt(
 
         likes[id] = _asInt(
           post['likesCount'],
-          post['likes'] is List
-              ? (post['likes'] as List)
-                  .length
-              : 0,
+          post['likes'] is List ? (post['likes'] as List).length : 0,
         );
 
         // --------------------------------------------------------
@@ -380,26 +321,20 @@ views[id] = _asInt(
 
         comments[id] = _asInt(
           post['commentsCount'],
-          post['comments'] is List
-              ? (post['comments'] as List)
-                  .length
-              : 0,
+          post['comments'] is List ? (post['comments'] as List).length : 0,
         );
 
         // --------------------------------------------------------
         // REPOSTS
         // --------------------------------------------------------
 
-        reposts[id] = _asInt(
-          post['repostsCount'],
-        );
+        reposts[id] = _asInt(post['repostsCount']);
 
         // --------------------------------------------------------
         // USER LIKE STATE
         // --------------------------------------------------------
 
-        if (post['likedByMe'] == true ||
-            post['isLiked'] == true) {
+        if (post['likedByMe'] == true || post['isLiked'] == true) {
           liked.add(id);
         }
 
@@ -417,38 +352,25 @@ views[id] = _asInt(
         // POLL
         // --------------------------------------------------------
 
-        final poll =
-            post['poll'];
+        final poll = post['poll'];
 
         if (poll is Map) {
-          final pollMap =
-              Map<String, dynamic>.from(
-            poll,
-          );
+          final pollMap = Map<String, dynamic>.from(poll);
 
           final selected =
               pollMap['selectedOption'] ??
-                  pollMap['selectedByMe'] ??
-                  pollMap['userVote'];
+              pollMap['selectedByMe'] ??
+              pollMap['userVote'];
 
           if (selected is num) {
-            pollSelections[id] =
-                selected.toInt();
+            pollSelections[id] = selected.toInt();
           }
 
           final rawCounts =
-              pollMap['voteCounts'] ??
-                  pollMap['votes'] ??
-                  pollMap['counts'];
+              pollMap['voteCounts'] ?? pollMap['votes'] ?? pollMap['counts'];
 
           if (rawCounts is List) {
-            pollCounts[id] =
-                rawCounts
-                    .map(
-                      (value) =>
-                          _asInt(value),
-                    )
-                    .toList();
+            pollCounts[id] = rawCounts.map((value) => _asInt(value)).toList();
           }
         }
 
@@ -457,31 +379,21 @@ views[id] = _asInt(
         // --------------------------------------------------------
 
         final directSelected =
-            post['selectedPollOption'] ??
-                post['pollSelectedOption'];
+            post['selectedPollOption'] ?? post['pollSelectedOption'];
 
         if (directSelected is num) {
-          pollSelections[id] =
-              directSelected.toInt();
+          pollSelections[id] = directSelected.toInt();
         }
 
-        final directCounts =
-            post['pollVoteCounts'];
+        final directCounts = post['pollVoteCounts'];
 
         if (directCounts is List) {
-          pollCounts[id] =
-              directCounts
-                  .map(
-                    (value) =>
-                        _asInt(value),
-                  )
-                  .toList();
+          pollCounts[id] = directCounts.map((value) => _asInt(value)).toList();
         }
       }
 
       setState(() {
-        _posts =
-            List<dynamic>.from(raw);
+        _posts = List<dynamic>.from(raw);
 
         _likeCounts
           ..clear()
@@ -496,8 +408,8 @@ views[id] = _asInt(
           ..addAll(reposts);
 
         _viewCounts
-        ..clear()
-        ..addAll(views);
+          ..clear()
+          ..addAll(views);
 
         _likedPosts
           ..clear()
@@ -518,9 +430,7 @@ views[id] = _asInt(
         _loadingPosts = false;
       });
     } catch (error) {
-      debugPrint(
-        'Load posts error: $error',
-      );
+      debugPrint('Load posts error: $error');
 
       if (!mounted) {
         return;
@@ -530,9 +440,7 @@ views[id] = _asInt(
         _loadingPosts = false;
       });
 
-      _showMessage(
-        'Unable to load posts',
-      );
+      _showMessage('Unable to load posts');
     }
   }
 
@@ -541,29 +449,21 @@ views[id] = _asInt(
   // ============================================================
 
   Future<void> _refresh() async {
-    await Future.wait([
-      _loadUser(),
-      _loadPosts(),
-    ]);
+    await Future.wait([_loadUser(), _loadPosts()]);
   }
 
   // ============================================================
   // LIKE
   // ============================================================
 
-  Future<void> _toggleLike(
-    String postId,
-  ) async {
-    if (postId.isEmpty ||
-        _likeLoading.contains(postId)) {
+  Future<void> _toggleLike(String postId) async {
+    if (postId.isEmpty || _likeLoading.contains(postId)) {
       return;
     }
 
-    final oldLiked =
-        _likedPosts.contains(postId);
+    final oldLiked = _likedPosts.contains(postId);
 
-    final oldCount =
-        _likeCounts[postId] ?? 0;
+    final oldCount = _likeCounts[postId] ?? 0;
 
     // Optimistic UI.
     if (mounted) {
@@ -573,66 +473,45 @@ views[id] = _asInt(
         if (oldLiked) {
           _likedPosts.remove(postId);
 
-          _likeCounts[postId] =
-              oldCount > 0
-                  ? oldCount - 1
-                  : 0;
+          _likeCounts[postId] = oldCount > 0 ? oldCount - 1 : 0;
         } else {
           _likedPosts.add(postId);
 
-          _likeCounts[postId] =
-              oldCount + 1;
+          _likeCounts[postId] = oldCount + 1;
         }
       });
     }
 
     try {
-      final result =
-          await ApiService.toggleLike(
-        postId: postId,
-      );
+      final result = await ApiService.toggleLike(postId: postId);
 
       if (result['success'] != true) {
-        throw Exception(
-          result['message'] ??
-              'Unable to update like',
-        );
+        throw Exception(result['message'] ?? 'Unable to update like');
       }
 
-      final data =
-          result['data'];
+      final data = result['data'];
 
-      if (data is Map &&
-          mounted) {
-        final serverLiked =
-            data['liked'] ??
-                data['isLiked'];
+      if (data is Map && mounted) {
+        final serverLiked = data['liked'] ?? data['isLiked'];
 
-        final serverCount =
-            data['likesCount'] ??
-                data['likeCount'];
+        final serverCount = data['likesCount'] ?? data['likeCount'];
 
         setState(() {
           if (serverLiked is bool) {
             if (serverLiked) {
               _likedPosts.add(postId);
             } else {
-              _likedPosts.remove(
-                postId,
-              );
+              _likedPosts.remove(postId);
             }
           }
 
           if (serverCount is num) {
-            _likeCounts[postId] =
-                serverCount.toInt();
+            _likeCounts[postId] = serverCount.toInt();
           }
         });
       }
     } catch (error) {
-      debugPrint(
-        'Like error: $error',
-      );
+      debugPrint('Like error: $error');
 
       if (!mounted) {
         return;
@@ -645,22 +524,14 @@ views[id] = _asInt(
           _likedPosts.remove(postId);
         }
 
-        _likeCounts[postId] =
-            oldCount;
+        _likeCounts[postId] = oldCount;
       });
 
-      _showMessage(
-        _friendlyError(
-          error,
-          'Unable to update like',
-        ),
-      );
+      _showMessage(_friendlyError(error, 'Unable to update like'));
     } finally {
       if (mounted) {
         setState(() {
-          _likeLoading.remove(
-            postId,
-          );
+          _likeLoading.remove(postId);
         });
       }
     }
@@ -670,71 +541,47 @@ views[id] = _asInt(
   // BOOKMARK
   // ============================================================
 
-  Future<void> _toggleBookmark(
-    String postId,
-  ) async {
-    if (postId.isEmpty ||
-        _bookmarkLoading.contains(postId)) {
+  Future<void> _toggleBookmark(String postId) async {
+    if (postId.isEmpty || _bookmarkLoading.contains(postId)) {
       return;
     }
 
-    final oldSaved =
-        _bookmarkedPosts.contains(
-      postId,
-    );
+    final oldSaved = _bookmarkedPosts.contains(postId);
 
     if (mounted) {
       setState(() {
-        _bookmarkLoading.add(
-          postId,
-        );
+        _bookmarkLoading.add(postId);
 
         if (oldSaved) {
-          _bookmarkedPosts.remove(
-            postId,
-          );
+          _bookmarkedPosts.remove(postId);
         } else {
-          _bookmarkedPosts.add(
-            postId,
-          );
+          _bookmarkedPosts.add(postId);
         }
       });
     }
 
     try {
-      final result =
-          await ApiService.toggleBookmark(
-        postId: postId,
-      );
+      final result = await ApiService.toggleBookmark(postId: postId);
 
       if (result['success'] != true) {
-        throw Exception(
-          result['message'] ??
-              'Unable to update bookmark',
-        );
+        throw Exception(result['message'] ?? 'Unable to update bookmark');
       }
 
-      final data =
-          result['data'];
+      final data = result['data'];
 
-      if (data is Map &&
-          mounted) {
+      if (data is Map && mounted) {
         final saved =
             data['bookmarked'] ??
-                data['saved'] ??
-                data['isBookmarked'] ??
-                data['savedByMe'];
+            data['saved'] ??
+            data['isBookmarked'] ??
+            data['savedByMe'];
 
         if (saved is bool) {
           setState(() {
             if (saved) {
-              _bookmarkedPosts.add(
-                postId,
-              );
+              _bookmarkedPosts.add(postId);
             } else {
-              _bookmarkedPosts.remove(
-                postId,
-              );
+              _bookmarkedPosts.remove(postId);
             }
           });
         }
@@ -742,15 +589,11 @@ views[id] = _asInt(
 
       if (mounted) {
         _showMessage(
-          oldSaved
-              ? 'Removed from bookmarks'
-              : 'Saved to bookmarks',
+          oldSaved ? 'Removed from bookmarks' : 'Saved to bookmarks',
         );
       }
     } catch (error) {
-      debugPrint(
-        'Bookmark error: $error',
-      );
+      debugPrint('Bookmark error: $error');
 
       if (!mounted) {
         return;
@@ -758,28 +601,17 @@ views[id] = _asInt(
 
       setState(() {
         if (oldSaved) {
-          _bookmarkedPosts.add(
-            postId,
-          );
+          _bookmarkedPosts.add(postId);
         } else {
-          _bookmarkedPosts.remove(
-            postId,
-          );
+          _bookmarkedPosts.remove(postId);
         }
       });
 
-      _showMessage(
-        _friendlyError(
-          error,
-          'Unable to update bookmark',
-        ),
-      );
+      _showMessage(_friendlyError(error, 'Unable to update bookmark'));
     } finally {
       if (mounted) {
         setState(() {
-          _bookmarkLoading.remove(
-            postId,
-          );
+          _bookmarkLoading.remove(postId);
         });
       }
     }
@@ -789,17 +621,12 @@ views[id] = _asInt(
   // POLL
   // ============================================================
 
-  Future<void> _votePoll(
-    String postId,
-    int optionIndex,
-  ) async {
-    if (postId.isEmpty ||
-        _pollVoting.contains(postId)) {
+  Future<void> _votePoll(String postId, int optionIndex) async {
+    if (postId.isEmpty || _pollVoting.contains(postId)) {
       return;
     }
 
-    final previousSelection =
-        _pollSelectedOptions[postId];
+    final previousSelection = _pollSelectedOptions[postId];
 
     if (mounted) {
       setState(() {
@@ -808,102 +635,66 @@ views[id] = _asInt(
     }
 
     try {
-      final result =
-          await ApiService.votePoll(
+      final result = await ApiService.votePoll(
         postId: postId,
         optionIndex: optionIndex,
       );
 
       if (result['success'] != true) {
-        throw Exception(
-          result['message'] ??
-              'Unable to vote in poll',
-        );
+        throw Exception(result['message'] ?? 'Unable to vote in poll');
       }
 
-      final data =
-          result['data'];
+      final data = result['data'];
 
-      if (data is Map &&
-          mounted) {
+      if (data is Map && mounted) {
         final selected =
             data['selectedOption'] ??
-                data['selected'] ??
-                data['optionIndex'] ??
-                data['userVote'];
+            data['selected'] ??
+            data['optionIndex'] ??
+            data['userVote'];
 
-        final counts =
-            data['voteCounts'] ??
-                data['votes'] ??
-                data['counts'];
+        final counts = data['voteCounts'] ?? data['votes'] ?? data['counts'];
 
         setState(() {
           if (selected is num) {
-            _pollSelectedOptions[
-                    postId] =
-                selected.toInt();
+            _pollSelectedOptions[postId] = selected.toInt();
           } else {
             // Server did not return the selected
             // option, so use the option we clicked.
-            _pollSelectedOptions[
-                    postId] =
-                optionIndex;
+            _pollSelectedOptions[postId] = optionIndex;
           }
 
           if (counts is List) {
-            _pollVoteCounts[postId] =
-                counts
-                    .map(
-                      (value) =>
-                          _asInt(value),
-                    )
-                    .toList();
+            _pollVoteCounts[postId] = counts
+                .map((value) => _asInt(value))
+                .toList();
           } else {
             // Some APIs return only the updated
             // option. Update our local count.
-            final existing =
-                List<int>.from(
-              _pollVoteCounts[
-                      postId] ??
-                  <int>[],
-            );
+            final existing = List<int>.from(_pollVoteCounts[postId] ?? <int>[]);
 
-            while (existing.length <=
-                optionIndex) {
+            while (existing.length <= optionIndex) {
               existing.add(0);
             }
 
-            if (previousSelection ==
-                null) {
-              existing[
-                  optionIndex]++;
+            if (previousSelection == null) {
+              existing[optionIndex]++;
 
-              _pollVoteCounts[
-                      postId] =
-                  existing;
+              _pollVoteCounts[postId] = existing;
             }
           }
         });
       }
     } catch (error) {
-      debugPrint(
-        'Poll vote error: $error',
-      );
+      debugPrint('Poll vote error: $error');
 
       if (mounted) {
-        _showMessage(
-          _friendlyError(
-            error,
-            'Unable to vote in poll',
-          ),
-        );
+        _showMessage(_friendlyError(error, 'Unable to vote in poll'));
       }
     } finally {
       if (mounted) {
         setState(() {
-          _pollVoting.remove(
-            postId,
-          );
+          _pollVoting.remove(postId);
         });
       }
     }
@@ -921,9 +712,7 @@ views[id] = _asInt(
   // "_dependents.isEmpty': is not true"
   // ============================================================
 
-  Future<void> _openComments(
-    String postId,
-  ) async {
+  Future<void> _openComments(String postId) async {
     if (postId.isEmpty) {
       return;
     }
@@ -931,47 +720,32 @@ views[id] = _asInt(
     List<dynamic> comments = [];
 
     try {
-      final result =
-          await ApiService.getComments(
-        postId: postId,
-      );
+      final result = await ApiService.getComments(postId: postId);
 
       if (result['success'] == true) {
-        final raw =
-            result['data']?['comments'];
+        final raw = result['data']?['comments'];
 
         if (raw is List) {
-          comments =
-              List<dynamic>.from(raw);
+          comments = List<dynamic>.from(raw);
         }
       }
     } catch (error) {
-      debugPrint(
-        'Get comments error: $error',
-      );
+      debugPrint('Get comments error: $error');
     }
 
     if (!mounted) {
       return;
     }
 
-    final result =
-        await showModalBottomSheet<
-            int?>(
+    final result = await showModalBottomSheet<int?>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: _surface,
-      shape:
-          const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(
-          top: Radius.circular(26),
-        ),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
       ),
-      builder: (
-        sheetContext,
-      ) {
+      builder: (sheetContext) {
         return _CommentsSheet(
           comments: comments,
           postId: postId,
@@ -994,8 +768,7 @@ views[id] = _asInt(
 
     if (result != null) {
       setState(() {
-        _commentCounts[postId] =
-            result;
+        _commentCounts[postId] = result;
       });
     }
   }
@@ -1004,37 +777,22 @@ views[id] = _asInt(
   // SHARE
   // ============================================================
 
-  Future<void> _sharePost(
-    Map<String, dynamic> post,
-  ) async {
-    final content =
-        post['content']
-                ?.toString()
-                .trim() ??
-            '';
+  Future<void> _sharePost(Map<String, dynamic> post) async {
+    final content = post['content']?.toString().trim() ?? '';
 
-    final authorRaw =
-        post['author'];
+    final authorRaw = post['author'];
 
-    final author =
-        authorRaw is Map
-            ? Map<String, dynamic>.from(
-                authorRaw,
-              )
-            : <String, dynamic>{};
+    final author = authorRaw is Map
+        ? Map<String, dynamic>.from(authorRaw)
+        : <String, dynamic>{};
 
-    final name =
-        _displayName(author);
+    final name = _displayName(author);
 
-    final username =
-        _username(author);
+    final username = _username(author);
 
-    final postId =
-        post['_id']?.toString();
+    final postId = post['_id']?.toString();
 
-    if (content.isEmpty &&
-        (postId == null ||
-            postId.isEmpty)) {
+    if (content.isEmpty && (postId == null || postId.isEmpty)) {
       return;
     }
 
@@ -1044,21 +802,15 @@ views[id] = _asInt(
 
     final repostOfRaw = post['repostOf'];
 
-    final repostOf =
-        (repostOfRaw is Map && repostOfRaw.isNotEmpty)
-            ? Map<String, dynamic>.from(repostOfRaw)
-            : null;
+    final repostOf = (repostOfRaw is Map && repostOfRaw.isNotEmpty)
+        ? Map<String, dynamic>.from(repostOfRaw)
+        : null;
 
-    final isPlainRepost =
-        repostOf != null && content.isEmpty;
+    final isPlainRepost = repostOf != null && content.isEmpty;
 
     final dynamic rawImageMedia = isPlainRepost
-        ? (repostOf['image'] ??
-            repostOf['imageUrl'] ??
-            repostOf['mediaUrl'])
-        : (post['image'] ??
-            post['imageUrl'] ??
-            post['mediaUrl']);
+        ? (repostOf['image'] ?? repostOf['imageUrl'] ?? repostOf['mediaUrl'])
+        : (post['image'] ?? post['imageUrl'] ?? post['mediaUrl']);
 
     final dynamic rawVideoMedia = isPlainRepost
         ? (repostOf['video'] ?? repostOf['videoUrl'])
@@ -1067,32 +819,20 @@ views[id] = _asInt(
     File? mediaFile;
 
     try {
-      if (rawVideoMedia != null &&
-          rawVideoMedia.toString().trim().isNotEmpty) {
-        mediaFile = await _prepareShareMediaFile(
-          rawVideoMedia,
-          isVideo: true,
-        );
+      if (rawVideoMedia != null && rawVideoMedia.toString().trim().isNotEmpty) {
+        mediaFile = await _prepareShareMediaFile(rawVideoMedia, isVideo: true);
       } else if (rawImageMedia != null &&
           rawImageMedia.toString().trim().isNotEmpty) {
-        mediaFile = await _prepareShareMediaFile(
-          rawImageMedia,
-          isVideo: false,
-        );
+        mediaFile = await _prepareShareMediaFile(rawImageMedia, isVideo: false);
       }
     } catch (error) {
-      debugPrint(
-        'Prepare share media error: $error',
-      );
+      debugPrint('Prepare share media error: $error');
       // Fall back to a text-only share below.
     }
 
-    final buffer =
-        StringBuffer();
+    final buffer = StringBuffer();
 
-    buffer.writeln(
-      '$name${username.isNotEmpty ? ' @$username' : ''}',
-    );
+    buffer.writeln('$name${username.isNotEmpty ? ' @$username' : ''}');
 
     if (content.isNotEmpty) {
       buffer.writeln();
@@ -1100,53 +840,35 @@ views[id] = _asInt(
     }
 
     buffer.writeln();
-    buffer.writeln(
-      'Shared from MicroBlog',
-    );
+    buffer.writeln('Shared from MicroBlog');
 
-    if (postId != null &&
-        postId.isNotEmpty) {
+    if (postId != null && postId.isNotEmpty) {
       buffer.writeln();
-      buffer.writeln(
-        'Post ID: $postId',
-      );
+      buffer.writeln('Post ID: $postId');
     }
 
     try {
-      final result =
-          await SharePlus.instance.share(
+      final result = await SharePlus.instance.share(
         ShareParams(
-          text:
-              buffer.toString().trim(),
-          subject:
-              'Post from MicroBlog',
-          files: mediaFile != null
-              ? [XFile(mediaFile.path)]
-              : null,
+          text: buffer.toString().trim(),
+          subject: 'Post from MicroBlog',
+          files: mediaFile != null ? [XFile(mediaFile.path)] : null,
         ),
       );
 
-      if (result.status ==
-              ShareResultStatus.success &&
+      if (result.status == ShareResultStatus.success &&
           mounted &&
           postId != null &&
           postId.isNotEmpty) {
         setState(() {
-          _shareCounts[postId] =
-              (_shareCounts[postId] ??
-                      0) +
-                  1;
+          _shareCounts[postId] = (_shareCounts[postId] ?? 0) + 1;
         });
       }
     } catch (error) {
-      debugPrint(
-        'Share error: $error',
-      );
+      debugPrint('Share error: $error');
 
       if (mounted) {
-        _showMessage(
-          'Unable to share post',
-        );
+        _showMessage('Unable to share post');
       }
     }
   }
@@ -1225,9 +947,7 @@ views[id] = _asInt(
       return null;
     }
 
-    final tempDir = await Directory.systemTemp.createTemp(
-      'microblog_share',
-    );
+    final tempDir = await Directory.systemTemp.createTemp('microblog_share');
 
     final file = File(
       '${tempDir.path}/share_${DateTime.now().millisecondsSinceEpoch}.$extension',
@@ -1242,9 +962,7 @@ views[id] = _asInt(
   // REPOST WITH CAPTION
   // ============================================================
 
-  Future<void> _repost(
-    Map<String, dynamic> post,
-  ) async {
+  Future<void> _repost(Map<String, dynamic> post) async {
     final postId = post['_id']?.toString() ?? '';
 
     if (postId.isEmpty || _repostLoading.contains(postId)) {
@@ -1263,9 +981,7 @@ views[id] = _asInt(
       useSafeArea: true,
       backgroundColor: localSurface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(26),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
       ),
       builder: (sheetContext) {
         return RepostModalSheet(
@@ -1301,9 +1017,7 @@ views[id] = _asInt(
         if (!mounted) return;
 
         if (result['success'] != true) {
-          throw Exception(
-            result['message'] ?? 'Unable to repost',
-          );
+          throw Exception(result['message'] ?? 'Unable to repost');
         }
 
         final count = result['data']?['repostsCount'];
@@ -1321,12 +1035,7 @@ views[id] = _asInt(
         debugPrint('Repost error: $error');
 
         if (mounted) {
-          _showMessage(
-            _friendlyError(
-              error,
-              'Unable to repost',
-            ),
-          );
+          _showMessage(_friendlyError(error, 'Unable to repost'));
         }
       } finally {
         if (mounted) {
@@ -1338,612 +1047,564 @@ views[id] = _asInt(
     });
   }
 
-// ============================================================
-// POST CARD (PERMANENT REPOST MEDIA SYNCHRONIZATION FIX)
-// ============================================================
+  Future<void> _recordPostView(String postId) async {
+    if (postId.isEmpty ||
+        _viewedPostIds.contains(postId) ||
+        _recordingPostIds.contains(postId)) {
+      return;
+    }
 
-Widget _postCard(Map<String, dynamic> post) {
-  final id = post['_id']?.toString() ?? '';
-  final views = _viewCounts[id] ?? 0;
+    _recordingPostIds.add(postId);
 
-  // ----------------------------------------------------------
-  // REPOST DETECTION
-  // ----------------------------------------------------------
+    try {
+      final result = await ApiService.recordView(postId: postId);
 
-  final repostAuthorRaw = post['author'];
+      if (!mounted || result['success'] != true) return;
 
-  final repostAuthor = repostAuthorRaw is Map
-      ? Map<String, dynamic>.from(repostAuthorRaw)
-      : <String, dynamic>{};
+      final data = result['data'];
+      final count = data is Map ? data['viewsCount'] : null;
 
-  final repostOfRaw = post['repostOf'];
+      if (count is num) {
+        setState(() {
+          _viewCounts[postId] = count.toInt();
 
-  final repostOf = (repostOfRaw is Map && repostOfRaw.isNotEmpty)
-      ? Map<String, dynamic>.from(repostOfRaw)
-      : null;
+          for (final post in _posts) {
+            if (post is Map && post['_id']?.toString() == postId) {
+              post['viewsCount'] = count.toInt();
+              break;
+            }
+          }
+        });
+      }
 
-  final repostCaption = post['content']?.toString().trim() ?? '';
+      _viewedPostIds.add(postId);
+    } catch (error) {
+      debugPrint('Unable to record Home post view: $error');
+    } finally {
+      _recordingPostIds.remove(postId);
+    }
+  }
 
-  final isRepost = repostOf != null;
+  // ============================================================
+  // POST CARD (PERMANENT REPOST MEDIA SYNCHRONIZATION FIX)
+  // ============================================================
 
-  final isQuoteRepost = isRepost && repostCaption.isNotEmpty;
+  Widget _postCard(Map<String, dynamic> post) {
+    final id = post['_id']?.toString() ?? '';
+    final views = _viewCounts[id] ?? 0;
 
-  final isPlainRepost = isRepost && !isQuoteRepost;
+    // ----------------------------------------------------------
+    // REPOST DETECTION
+    // ----------------------------------------------------------
 
-  final Map<String, dynamic> author;
-  final String content;
+    final repostAuthorRaw = post['author'];
 
-  final dynamic rawImageMedia;
-  final dynamic rawVideoMedia;
-
-  if (isPlainRepost) {
-    final originalAuthorRaw = repostOf['author'];
-
-    author = originalAuthorRaw is Map
-        ? Map<String, dynamic>.from(originalAuthorRaw)
+    final repostAuthor = repostAuthorRaw is Map
+        ? Map<String, dynamic>.from(repostAuthorRaw)
         : <String, dynamic>{};
 
-    content = repostOf['content']?.toString() ?? '';
+    final repostOfRaw = post['repostOf'];
 
-    // Pull media from original post.
-    rawImageMedia = repostOf['image'] ??
-        repostOf['imageUrl'] ??
-        repostOf['mediaUrl'];
+    final repostOf = (repostOfRaw is Map && repostOfRaw.isNotEmpty)
+        ? Map<String, dynamic>.from(repostOfRaw)
+        : null;
 
-    rawVideoMedia = repostOf['video'] ?? repostOf['videoUrl'];
-  } else {
-    author = repostAuthor;
+    final repostCaption = post['content']?.toString().trim() ?? '';
 
-    content = post['content']?.toString() ?? '';
+    final isRepost = repostOf != null;
 
-    // Pull media directly from post.
-    rawImageMedia =
-        post['image'] ?? post['imageUrl'] ?? post['mediaUrl'];
+    final isQuoteRepost = isRepost && repostCaption.isNotEmpty;
 
-    rawVideoMedia = post['video'] ?? post['videoUrl'];
-  }
+    final isPlainRepost = isRepost && !isQuoteRepost;
 
-  final name = _displayName(author);
+    final Map<String, dynamic> author;
+    final String content;
 
-  final username = _username(author);
+    final dynamic rawImageMedia;
+    final dynamic rawVideoMedia;
 
-  // ----------------------------------------------------------
-  // AVATAR RE-MAPPING
-  // ----------------------------------------------------------
+    if (isPlainRepost) {
+      final originalAuthorRaw = repostOf['author'];
 
-  final String currentUserId =
-      _currentUser?['_id']?.toString() ??
-      _currentUser?['id']?.toString() ??
-      '';
+      author = originalAuthorRaw is Map
+          ? Map<String, dynamic>.from(originalAuthorRaw)
+          : <String, dynamic>{};
 
-  final String postAuthorId =
-      author['_id']?.toString() ??
-      author['id']?.toString() ??
-      '';
+      content = repostOf['content']?.toString() ?? '';
 
-  dynamic displayedAvatar = author['avatar'];
+      // Pull media from original post.
+      rawImageMedia =
+          repostOf['image'] ?? repostOf['imageUrl'] ?? repostOf['mediaUrl'];
 
-  if (currentUserId.isNotEmpty && postAuthorId == currentUserId) {
-    displayedAvatar = _currentUser?['avatar'];
-  }
+      rawVideoMedia = repostOf['video'] ?? repostOf['videoUrl'];
+    } else {
+      author = repostAuthor;
 
-  final liked = _likedPosts.contains(id);
+      content = post['content']?.toString() ?? '';
 
-  final saved = _bookmarkedPosts.contains(id);
+      // Pull media directly from post.
+      rawImageMedia = post['image'] ?? post['imageUrl'] ?? post['mediaUrl'];
 
-  final String media = rawImageMedia?.toString().trim() ?? '';
+      rawVideoMedia = post['video'] ?? post['videoUrl'];
+    }
 
-  final String videoMedia = rawVideoMedia?.toString().trim() ?? '';
+    final name = _displayName(author);
 
-  final location = post['location']?.toString().trim() ?? '';
+    final username = _username(author);
 
-  final poll = post['poll'] is Map
-      ? Map<String, dynamic>.from(post['poll'])
-      : null;
+    // ----------------------------------------------------------
+    // AVATAR RE-MAPPING
+    // ----------------------------------------------------------
 
-  final likes = _likeCounts[id] ?? 0;
+    final String currentUserId =
+        _currentUser?['_id']?.toString() ??
+        _currentUser?['id']?.toString() ??
+        '';
 
-  final comments = _commentCounts[id] ?? 0;
+    final String postAuthorId =
+        author['_id']?.toString() ?? author['id']?.toString() ?? '';
 
-  final reposts =
-      _repostCounts[id] ?? _asInt(post['repostsCount']);
+    dynamic displayedAvatar = author['avatar'];
 
-  final shares = _shareCounts[id] ?? 0;
+    if (currentUserId.isNotEmpty && postAuthorId == currentUserId) {
+      displayedAvatar = _currentUser?['avatar'];
+    }
 
-  return Container(
-    color: _surface,
-    child: Column(
-      children: [
-        // ------------------------------------------------------
-        // REPOST LABEL
-        // ------------------------------------------------------
+    final liked = _likedPosts.contains(id);
 
-        if (isRepost)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              16,
-              10,
-              16,
-              0,
-            ),
-            child: Row(
-              children: [
-                const SizedBox(width: 34),
+    final saved = _bookmarkedPosts.contains(id);
 
-                Icon(
-                  CupertinoIcons.arrow_2_squarepath,
-                  size: 15,
-                  color: _muted,
-                ),
+    final String media = rawImageMedia?.toString().trim() ?? '';
 
-                const SizedBox(width: 6),
+    final String videoMedia = rawVideoMedia?.toString().trim() ?? '';
 
-                Flexible(
-                  child: Text(
-                    '${_displayName(repostAuthor)} reposted',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: _muted,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+    final location = post['location']?.toString().trim() ?? '';
 
-        // ------------------------------------------------------
-        // POST BODY
-        // ------------------------------------------------------
+    final poll = post['poll'] is Map
+        ? Map<String, dynamic>.from(post['poll'])
+        : null;
 
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            16,
-            14,
-            16,
-            10,
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _openAuthorProfile(author),
-                child: _avatar(
-                  displayedAvatar,
-                  name,
-                  21,
-                ),
-              ),
+    final likes = _likeCounts[id] ?? 0;
 
-              const SizedBox(width: 11),
+    final comments = _commentCounts[id] ?? 0;
 
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    final reposts = _repostCounts[id] ?? _asInt(post['repostsCount']);
+
+    final shares = _shareCounts[id] ?? 0;
+
+    return VisibilityDetector(
+      key: Key('home-post-$id'),
+      onVisibilityChanged: (info) {
+        if (info.visibleFraction >= 0.15) {
+          _recordPostView(id);
+        }
+      },
+      child: Container(
+        color: _surface,
+        child: Column(
+          children: [
+            // ------------------------------------------------------
+            // REPOST LABEL
+            // ------------------------------------------------------
+            if (isRepost)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                child: Row(
                   children: [
-                    // ------------------------------------------------
-                    // AUTHOR ROW
-                    // ------------------------------------------------
+                    const SizedBox(width: 34),
 
-                    Row(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                            children: [
-                              // Full name (tap to open profile)
-                              GestureDetector(
-                                behavior:
-                                    HitTestBehavior.opaque,
-                                onTap: () =>
-                                    _openAuthorProfile(author),
-                                child: Text(
-                                  name,
-                                  maxLines: 1,
-                                  overflow:
-                                      TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: _text,
-                                    fontSize: 15.5,
-                                    fontWeight:
-                                        FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-
-                              const SizedBox(height: 2),
-
-                              // Username + time
-                              Row(
-                                children: [
-                                  if (username.isNotEmpty)
-                                    Flexible(
-                                      child: Text(
-                                        '@$username',
-                                        maxLines: 1,
-                                        overflow:
-                                            TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color: _muted,
-                                          fontSize: 13.5,
-                                        ),
-                                      ),
-                                    ),
-
-                                  if (username.isNotEmpty) ...[
-                                    const SizedBox(width: 6),
-
-                                    Text(
-                                      '•',
-                                      style: TextStyle(
-                                        color: _muted,
-                                      ),
-                                    ),
-
-                                    const SizedBox(width: 6),
-                                  ],
-
-                                  Text(
-                                    _timeAgo(
-                                      post['createdAt'],
-                                    ),
-                                    style: TextStyle(
-                                      color: _muted,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // Options
-                        IconButton(
-                          padding: EdgeInsets.zero,
-                          constraints:
-                              const BoxConstraints(
-                            minWidth: 32,
-                            minHeight: 32,
-                          ),
-                          onPressed: () {
-                            _showPostOptions(post);
-                          },
-                          icon: Icon(
-                            Icons.more_horiz_rounded,
-                            color: _muted,
-                          ),
-                        ),
-                      ],
+                    Icon(
+                      CupertinoIcons.arrow_2_squarepath,
+                      size: 15,
+                      color: _muted,
                     ),
 
-                    // ------------------------------------------------
-                    // TEXT CONTENT
-                    // ------------------------------------------------
+                    const SizedBox(width: 6),
 
-                    if (content.trim().isNotEmpty) ...[
-                      const SizedBox(height: 7),
-
-                      Text(
-                        content,
+                    Flexible(
+                      child: Text(
+                        '${_displayName(repostAuthor)} reposted',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: _text,
-                          fontSize: 16,
-                          height: 1.42,
-                        ),
-                      ),
-                    ],
-
-                    // ------------------------------------------------
-                    // QUOTE REPOST EMBED
-                    // ------------------------------------------------
-
-                    if (isQuoteRepost)
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          top: 10,
-                        ),
-                        child: Container(
-                          width: double.infinity,
-                          padding:
-                              const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: _divider,
-                            ),
-                            borderRadius:
-                                BorderRadius.circular(14),
-                          ),
-                          child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  _avatar(
-                                    repostOf['author']
-                                            is Map
-                                        ? repostOf['author']
-                                        : <String, dynamic>{},
-                                    _displayName(
-                                      repostOf['author']
-                                              is Map
-                                          ? Map<String,
-                                              dynamic>.from(
-                                              repostOf[
-                                                  'author'],
-                                            )
-                                          : <String,
-                                              dynamic>{},
-                                    ),
-                                    13,
-                                  ),
-
-                                  const SizedBox(width: 7),
-
-                                  Flexible(
-                                    child: Text(
-                                      _displayName(
-                                        repostOf['author']
-                                                is Map
-                                            ? Map<String,
-                                                dynamic>.from(
-                                                repostOf[
-                                                    'author'],
-                                              )
-                                            : <String,
-                                                dynamic>{},
-                                      ),
-                                      maxLines: 1,
-                                      overflow:
-                                          TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: _text,
-                                        fontSize: 13.5,
-                                        fontWeight:
-                                            FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-
-                                  const SizedBox(width: 4),
-
-                                  Text(
-                                    _timeAgo(
-                                      repostOf[
-                                          'createdAt'],
-                                    ),
-                                    style: TextStyle(
-                                      color: _muted,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-
-                              if (repostOf['content']
-                                      ?.toString()
-                                      .trim()
-                                      .isNotEmpty ==
-                                  true) ...[
-                                const SizedBox(height: 6),
-
-                                Text(
-                                  repostOf['content']
-                                      .toString(),
-                                  maxLines: 4,
-                                  overflow:
-                                      TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: _text,
-                                    fontSize: 14.5,
-                                    height: 1.35,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-
-                    // ------------------------------------------------
-                    // LOCATION
-                    // ------------------------------------------------
-
-                    if (location.isNotEmpty)
-                      Padding(
-                        padding:
-                            const EdgeInsets.only(top: 8),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.location_on_outlined,
-                              size: 16,
-                              color: _muted,
-                            ),
-
-                            const SizedBox(width: 4),
-
-                            Flexible(
-                              child: Text(
-                                location,
-                                style: TextStyle(
-                                  color: _muted,
-                                  fontSize: 13.5,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                    // ------------------------------------------------
-                    // IMAGE MEDIA
-                    // ------------------------------------------------
-
-                    if (media.isNotEmpty)
-                      Padding(
-                        padding:
-                            const EdgeInsets.only(top: 10),
-                        child: ClipRRect(
-                          borderRadius:
-                              BorderRadius.circular(16),
-                          child: _media(media),
-                        ),
-                      ),
-
-                    // ------------------------------------------------
-                    // VIDEO MEDIA
-                    // ------------------------------------------------
-
-                    if (videoMedia.isNotEmpty)
-                      Padding(
-                        padding:
-                            const EdgeInsets.only(top: 10),
-                        child: ClipRRect(
-                          borderRadius:
-                              BorderRadius.circular(16),
-                          child: HomeVideoPlayer(
-                            videoData: videoMedia,
-                          ),
-                        ),
-                      ),
-
-                    // ------------------------------------------------
-                    // POLL
-                    // ------------------------------------------------
-
-                    if (poll != null)
-                      _pollPreview(
-                        poll,
-                        id,
-                      ),
-
-                    const SizedBox(height: 8),
-// ------------------------------------------------------
-// VIEW COUNT
-// ------------------------------------------------------
-
-Row(
-  children: [
-    Icon(
-      CupertinoIcons.eye,
-      size: 16,
-      color: _muted,
-    ),
-    const SizedBox(width: 5),
-    Text(
-      '${_formatCount(views)} views',
-      style: TextStyle(
-        color: _muted,
-        fontSize: 12,
-      ),
-    ),
-  ],
-),
-
-const SizedBox(height: 8),
-
-                    // ------------------------------------------------
-                    // ACTION BAR
-                    // ------------------------------------------------
-
-                    Row(
-                      mainAxisAlignment:
-                          MainAxisAlignment.spaceBetween,
-                      children: [
-                        // LIKE
-                        _actionButton(
-  icon: liked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
-  count: likes,
-  color: liked ? _red : _muted,
-  active: liked,
-  loading: _likeLoading.contains(id),
-  onTap: () {
-    _toggleLike(id);
-  },
-),
-
-                        // COMMENT
-                        
-                        _actionButton(
-                          icon: CupertinoIcons.bubble_left,
-                          count: comments,
                           color: _muted,
-                          onTap: () {
-                            _openComments(id);
-                          },
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
                         ),
-
-                        // REPOST
-                        _actionButton(
-                          icon: CupertinoIcons
-                              .arrow_2_squarepath,
-                          count: reposts,
-                          color: _muted,
-                          loading:
-                              _repostLoading.contains(id),
-                          onTap: () {
-                            _repost(post);
-                          },
-                        ),
-
-                        // SHARE
-                        _actionButton(
-                          icon:CupertinoIcons
-                              .arrowshape_turn_up_right,
-                          count: shares,
-                          color: _muted,
-                          onTap: () {
-                            _sharePost(post);
-                          },
-                        ),
-
-                        // BOOKMARK
-                        _actionButton(
-                          icon: saved
-                              ? CupertinoIcons
-                                  .bookmark_fill
-                              : CupertinoIcons.bookmark,
-                          count: 0,
-                          color:
-                              saved ? _accent : _muted,
-                          active: saved,
-                          loading:
-                              _bookmarkLoading.contains(
-                            id,
-                          ),
-                          onTap: () {
-                            _toggleBookmark(id);
-                          },
-                          showCount: false,
-                        ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
+
+            // ------------------------------------------------------
+            // POST BODY
+            // ------------------------------------------------------
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _openAuthorProfile(author),
+                    child: _avatar(displayedAvatar, name, 21),
+                  ),
+
+                  const SizedBox(width: 11),
+
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // ------------------------------------------------
+                        // AUTHOR ROW
+                        // ------------------------------------------------
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Full name (tap to open profile)
+                                  GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () => _openAuthorProfile(author),
+                                    child: Text(
+                                      name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: _text,
+                                        fontSize: 15.5,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 2),
+
+                                  // Username + time
+                                  Row(
+                                    children: [
+                                      if (username.isNotEmpty)
+                                        Flexible(
+                                          child: Text(
+                                            '@$username',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: _muted,
+                                              fontSize: 13.5,
+                                            ),
+                                          ),
+                                        ),
+
+                                      if (username.isNotEmpty) ...[
+                                        const SizedBox(width: 6),
+
+                                        Text(
+                                          '•',
+                                          style: TextStyle(color: _muted),
+                                        ),
+
+                                        const SizedBox(width: 6),
+                                      ],
+
+                                      Text(
+                                        _timeAgo(post['createdAt']),
+                                        style: TextStyle(
+                                          color: _muted,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Options
+                            IconButton(
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 32,
+                                minHeight: 32,
+                              ),
+                              onPressed: () {
+                                _showPostOptions(post);
+                              },
+                              icon: Icon(
+                                Icons.more_horiz_rounded,
+                                color: _muted,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        // ------------------------------------------------
+                        // TEXT CONTENT
+                        // ------------------------------------------------
+                        if (content.trim().isNotEmpty) ...[
+                          const SizedBox(height: 7),
+
+                          Text(
+                            content,
+                            style: TextStyle(
+                              color: _text,
+                              fontSize: 16,
+                              height: 1.42,
+                            ),
+                          ),
+                        ],
+
+                        // ------------------------------------------------
+                        // QUOTE REPOST EMBED
+                        // ------------------------------------------------
+                        if (isQuoteRepost)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: _divider),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      _avatar(
+                                        repostOf['author'] is Map
+                                            ? repostOf['author']
+                                            : <String, dynamic>{},
+                                        _displayName(
+                                          repostOf['author'] is Map
+                                              ? Map<String, dynamic>.from(
+                                                  repostOf['author'],
+                                                )
+                                              : <String, dynamic>{},
+                                        ),
+                                        13,
+                                      ),
+
+                                      const SizedBox(width: 7),
+
+                                      Flexible(
+                                        child: Text(
+                                          _displayName(
+                                            repostOf['author'] is Map
+                                                ? Map<String, dynamic>.from(
+                                                    repostOf['author'],
+                                                  )
+                                                : <String, dynamic>{},
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: _text,
+                                            fontSize: 13.5,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+
+                                      const SizedBox(width: 4),
+
+                                      Text(
+                                        _timeAgo(repostOf['createdAt']),
+                                        style: TextStyle(
+                                          color: _muted,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+
+                                  if (repostOf['content']
+                                          ?.toString()
+                                          .trim()
+                                          .isNotEmpty ==
+                                      true) ...[
+                                    const SizedBox(height: 6),
+
+                                    Text(
+                                      repostOf['content'].toString(),
+                                      maxLines: 4,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: _text,
+                                        fontSize: 14.5,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+
+                        // ------------------------------------------------
+                        // LOCATION
+                        // ------------------------------------------------
+                        if (location.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.location_on_outlined,
+                                  size: 16,
+                                  color: _muted,
+                                ),
+
+                                const SizedBox(width: 4),
+
+                                Flexible(
+                                  child: Text(
+                                    location,
+                                    style: TextStyle(
+                                      color: _muted,
+                                      fontSize: 13.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                        // ------------------------------------------------
+                        // IMAGE MEDIA
+                        // ------------------------------------------------
+                        if (media.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: _media(media),
+                            ),
+                          ),
+
+                        // ------------------------------------------------
+                        // VIDEO MEDIA
+                        // ------------------------------------------------
+                        if (videoMedia.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: HomeVideoPlayer(videoData: videoMedia),
+                            ),
+                          ),
+
+                        // ------------------------------------------------
+                        // POLL
+                        // ------------------------------------------------
+                        if (poll != null) _pollPreview(poll, id),
+
+                        const SizedBox(height: 8),
+
+                        // ------------------------------------------------------
+                        // VIEW COUNT
+                        // ------------------------------------------------------
+                        Row(
+                          children: [
+                            Icon(CupertinoIcons.eye, size: 16, color: _muted),
+                            const SizedBox(width: 5),
+                            Text(
+                              '${_formatCount(views)} views',
+                              style: TextStyle(color: _muted, fontSize: 12),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        // ------------------------------------------------
+                        // ACTION BAR
+                        // ------------------------------------------------
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // LIKE
+                            _actionButton(
+                              icon: liked
+                                  ? CupertinoIcons.heart_fill
+                                  : CupertinoIcons.heart,
+                              count: likes,
+                              color: liked ? _red : _muted,
+                              active: liked,
+                              loading: _likeLoading.contains(id),
+                              onTap: () {
+                                _toggleLike(id);
+                              },
+                            ),
+
+                            // COMMENT
+                            _actionButton(
+                              icon: CupertinoIcons.bubble_left,
+                              count: comments,
+                              color: _muted,
+                              onTap: () {
+                                _openComments(id);
+                              },
+                            ),
+
+                            // REPOST
+                            _actionButton(
+                              icon: CupertinoIcons.arrow_2_squarepath,
+                              count: reposts,
+                              color: _muted,
+                              loading: _repostLoading.contains(id),
+                              onTap: () {
+                                _repost(post);
+                              },
+                            ),
+
+                            // SHARE
+                            _actionButton(
+                              icon: CupertinoIcons.arrowshape_turn_up_right,
+                              count: shares,
+                              color: _muted,
+                              onTap: () {
+                                _sharePost(post);
+                              },
+                            ),
+
+                            // BOOKMARK
+                            _actionButton(
+                              icon: saved
+                                  ? CupertinoIcons.bookmark_fill
+                                  : CupertinoIcons.bookmark,
+                              count: 0,
+                              color: saved ? _accent : _muted,
+                              active: saved,
+                              loading: _bookmarkLoading.contains(id),
+                              onTap: () {
+                                _toggleBookmark(id);
+                              },
+                              showCount: false,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            Divider(height: 1, color: _divider),
+          ],
         ),
+      ),
+    );
+  }
 
-        Divider(
-          height: 1,
-          color: _divider,
-        ),
-      ],
-    ),
-  );
-}
-
-
-    // ============================================================
+  // ============================================================
   // ACTION BUTTON (MODERN X / INSTAGRAM FLOATING STYLE)
   // ============================================================
 
@@ -1966,10 +1627,7 @@ const SizedBox(height: 8),
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 4,
-          vertical: 6,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1986,18 +1644,13 @@ const SizedBox(height: 8),
                       ),
                     )
                   : iconWidget != null
-                      ? SizedBox(
-                          key: ValueKey(iconWidget.hashCode),
-                          width: 22,
-                          height: 22,
-                          child: iconWidget,
-                        )
-                      : Icon(
-                          icon,
-                          key: ValueKey(icon),
-                          size: 22,
-                          color: color,
-                        ),
+                  ? SizedBox(
+                      key: ValueKey(iconWidget.hashCode),
+                      width: 22,
+                      height: 22,
+                      child: iconWidget,
+                    )
+                  : Icon(icon, key: ValueKey(icon), size: 22, color: color),
             ),
             if (showCount && count > 0) ...[
               const SizedBox(width: 5),
@@ -2016,43 +1669,28 @@ const SizedBox(height: 8),
     );
   }
 
-
   // ============================================================
   // MEDIA
   // ============================================================
 
-  Widget _media(
-    dynamic value,
-  ) {
-    final text =
-        value.toString().trim();
+  Widget _media(dynamic value) {
+    final text = value.toString().trim();
 
-    final bytes =
-        ApiService.dataUrlToBytes(
-      text,
-    );
+    final bytes = ApiService.dataUrlToBytes(text);
 
     if (bytes != null) {
       return Image.memory(
-        Uint8List.fromList(
-          bytes,
-        ),
-        width:
-            double.infinity,
+        Uint8List.fromList(bytes),
+        width: double.infinity,
         height: 280,
         fit: BoxFit.cover,
-        errorBuilder:
-            (_, __, ___) {
-          return const SizedBox
-              .shrink();
+        errorBuilder: (_, __, ___) {
+          return const SizedBox.shrink();
         },
       );
     }
 
-    final url =
-        ApiService.normalizeImageUrl(
-      text,
-    );
+    final url = ApiService.normalizeImageUrl(text);
 
     if (url == null) {
       return const SizedBox.shrink();
@@ -2060,14 +1698,11 @@ const SizedBox(height: 8),
 
     return Image.network(
       url,
-      width:
-          double.infinity,
+      width: double.infinity,
       height: 280,
       fit: BoxFit.cover,
-      errorBuilder:
-          (_, __, ___) {
-        return const SizedBox
-            .shrink();
+      errorBuilder: (_, __, ___) {
+        return const SizedBox.shrink();
       },
     );
   }
@@ -2076,219 +1711,106 @@ const SizedBox(height: 8),
   // POLL UI
   // ============================================================
 
-  Widget _pollPreview(
-    Map<String, dynamic> poll,
-    String postId,
-  ) {
-    final options =
-        poll['options'] is List
-            ? List<dynamic>.from(
-                poll['options'],
-              )
-            : <dynamic>[];
+  Widget _pollPreview(Map<String, dynamic> poll, String postId) {
+    final options = poll['options'] is List
+        ? List<dynamic>.from(poll['options'])
+        : <dynamic>[];
 
     if (options.length < 2) {
       return const SizedBox.shrink();
     }
 
-    final selected =
-        _pollSelectedOptions[
-            postId];
+    final selected = _pollSelectedOptions[postId];
 
-    final counts =
-        _pollVoteCounts[postId];
+    final counts = _pollVoteCounts[postId];
 
-    final totalVotes =
-        counts == null
-            ? 0
-            : counts.fold<int>(
-                0,
-                (
-                  sum,
-                  value,
-                ) =>
-                    sum + value,
-              );
+    final totalVotes = counts == null
+        ? 0
+        : counts.fold<int>(0, (sum, value) => sum + value);
 
-    final voting =
-        _pollVoting.contains(
-      postId,
-    );
+    final voting = _pollVoting.contains(postId);
 
-    final hasVoted =
-        selected != null;
+    final hasVoted = selected != null;
 
     return Container(
-      margin:
-          const EdgeInsets.only(
-        top: 10,
-      ),
-      padding:
-          const EdgeInsets.all(
-        12,
-      ),
-      decoration:
-          BoxDecoration(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
         color: _composer,
-        borderRadius:
-            BorderRadius.circular(
-          16,
-        ),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         children: [
-          for (
-            int index = 0;
-            index < options.length &&
-                index < 4;
-            index++
-          )
+          for (int index = 0; index < options.length && index < 4; index++)
             Padding(
-              padding:
-                  const EdgeInsets.only(
-                bottom: 8,
-              ),
+              padding: const EdgeInsets.only(bottom: 8),
               child: InkWell(
-                onTap:
-                    voting
-                        ? null
-                        : hasVoted
-                            ? null
-                            : () {
-                                _votePoll(
-                                  postId,
-                                  index,
-                                );
-                              },
-                borderRadius:
-                    BorderRadius.circular(
-                  13,
-                ),
+                onTap: voting
+                    ? null
+                    : hasVoted
+                    ? null
+                    : () {
+                        _votePoll(postId, index);
+                      },
+                borderRadius: BorderRadius.circular(13),
                 child: Container(
-                  width:
-                      double.infinity,
-                  padding:
-                      const EdgeInsets
-                          .symmetric(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
                     horizontal: 14,
                     vertical: 12,
                   ),
-                  decoration:
-                      BoxDecoration(
-                    color:
-                        selected ==
-                                index
-                            ? _accent
-                                .withOpacity(
-                                .10,
-                              )
-                            : Colors
-                                .transparent,
-                    border:
-                        Border.all(
-                      color:
-                          selected ==
-                                  index
-                              ? _accent
-                              : _divider,
-                      width:
-                          selected ==
-                                  index
-                              ? 1.4
-                              : 1,
+                  decoration: BoxDecoration(
+                    color: selected == index
+                        ? _accent.withOpacity(.10)
+                        : Colors.transparent,
+                    border: Border.all(
+                      color: selected == index ? _accent : _divider,
+                      width: selected == index ? 1.4 : 1,
                     ),
-                    borderRadius:
-                        BorderRadius
-                            .circular(
-                      13,
-                    ),
+                    borderRadius: BorderRadius.circular(13),
                   ),
-                  child:
-                      Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment
-                            .start,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
                           Expanded(
-                            child:
-                                Text(
-                              options[
-                                      index]
-                                  .toString(),
-                              style:
-                                  TextStyle(
-                                color:
-                                    _text,
-                                fontWeight:
-                                    FontWeight
-                                        .w600,
+                            child: Text(
+                              options[index].toString(),
+                              style: TextStyle(
+                                color: _text,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
-                          if (selected ==
-                              index)
+                          if (selected == index)
                             const Icon(
-                              Icons
-                                  .check_circle_rounded,
-                              color:
-                                  _accent,
-                              size:
-                                  20,
+                              Icons.check_circle_rounded,
+                              color: _accent,
+                              size: 20,
                             ),
                         ],
                       ),
 
-                      if (counts !=
-                              null &&
-                          index <
-                              counts
-                                  .length) ...[
-                        const SizedBox(
-                          height: 8,
-                        ),
+                      if (counts != null && index < counts.length) ...[
+                        const SizedBox(height: 8),
                         ClipRRect(
-                          borderRadius:
-                              BorderRadius
-                                  .circular(
-                            20,
-                          ),
-                          child:
-                              LinearProgressIndicator(
-                            minHeight:
-                                5,
-                            value:
-                                totalVotes ==
-                                        0
-                                    ? 0
-                                    : counts[
-                                            index] /
-                                        totalVotes,
-                            backgroundColor:
-                                _divider,
-                            valueColor:
-                                AlwaysStoppedAnimation<
-                                    Color>(
-                              _accent,
-                            ),
+                          borderRadius: BorderRadius.circular(20),
+                          child: LinearProgressIndicator(
+                            minHeight: 5,
+                            value: totalVotes == 0
+                                ? 0
+                                : counts[index] / totalVotes,
+                            backgroundColor: _divider,
+                            valueColor: AlwaysStoppedAnimation<Color>(_accent),
                           ),
                         ),
-                        const SizedBox(
-                          height: 4,
-                        ),
+                        const SizedBox(height: 4),
                         Text(
-                          totalVotes ==
-                                  0
+                          totalVotes == 0
                               ? '0 votes'
                               : '${counts[index]} votes',
-                          style:
-                              TextStyle(
-                            color:
-                                _muted,
-                            fontSize:
-                                12,
-                          ),
+                          style: TextStyle(color: _muted, fontSize: 12),
                         ),
                       ],
                     ],
@@ -2299,14 +1821,8 @@ const SizedBox(height: 8),
 
           if (voting)
             const Padding(
-              padding:
-                  EdgeInsets.only(
-                top: 3,
-              ),
-              child:
-                  LinearProgressIndicator(
-                minHeight: 2,
-              ),
+              padding: EdgeInsets.only(top: 3),
+              child: LinearProgressIndicator(minHeight: 2),
             ),
         ],
       ),
@@ -2322,17 +1838,12 @@ const SizedBox(height: 8),
   // BOOKMARK
   // SETTINGS
   // ============================================================
- 
+
   Widget _bottomNavigation() {
     return Container(
       decoration: BoxDecoration(
         color: _surface,
-        border: Border(
-          top: BorderSide(
-            color: _divider,
-            width: 0.8,
-          ),
-        ),
+        border: Border(top: BorderSide(color: _divider, width: 0.8)),
       ),
       child: SafeArea(
         top: false,
@@ -2341,17 +1852,17 @@ const SizedBox(height: 8),
           child: Row(
             children: [
               _bottomNavItem(
-  icon: CupertinoIcons.house,
-  activeIcon: CupertinoIcons.house_fill,
-  index: 0,
-  label: 'Home',
-),
+                icon: CupertinoIcons.house,
+                activeIcon: CupertinoIcons.house_fill,
+                index: 0,
+                label: 'Home',
+              ),
               _bottomNavItem(
-  icon: CupertinoIcons.play_rectangle,
-  activeIcon: CupertinoIcons.play_rectangle_fill,
-  index: 1,
-  label: 'Shorts',
-),
+                icon: CupertinoIcons.play_rectangle,
+                activeIcon: CupertinoIcons.play_rectangle_fill,
+                index: 1,
+                label: 'Shorts',
+              ),
               _buildCreateNavButton(),
               _bottomNavItem(
                 icon: CupertinoIcons.bookmark,
@@ -2371,14 +1882,14 @@ const SizedBox(height: 8),
       ),
     );
   }
- 
+
   // ============================================================
   // BOTTOM NAV ITEM
   // Filled, slightly larger icon + small accent dot when active.
   // ============================================================
- 
+
   static const double _navIconSize = 26;
- 
+
   Widget _bottomNavItem({
     required IconData icon,
     required IconData activeIcon,
@@ -2386,7 +1897,7 @@ const SizedBox(height: 8),
     required String label,
   }) {
     final active = _currentNavigationIndex == index;
- 
+
     return Expanded(
       child: Semantics(
         button: true,
@@ -2428,11 +1939,11 @@ const SizedBox(height: 8),
       ),
     );
   }
- 
+
   // ============================================================
   // CREATE (+) BUTTON
   // ============================================================
- 
+
   Widget _buildCreateNavButton() {
     return Expanded(
       child: Center(
@@ -2446,154 +1957,113 @@ const SizedBox(height: 8),
             child: Container(
               width: 46,
               height: 46,
-              decoration: BoxDecoration(
-                color: _text,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.add_rounded,
-                size: 30,
-                color: _surface,
-              ),
+              decoration: BoxDecoration(color: _text, shape: BoxShape.circle),
+              child: Icon(Icons.add_rounded, size: 30, color: _surface),
             ),
           ),
         ),
       ),
     );
   }
- 
+
   // ============================================================
   // BOTTOM NAV ACTION
   // ============================================================
- 
-  Future<void>
-      _onBottomNavigationTap(
-    int index,
-  ) async {
+
+  Future<void> _onBottomNavigationTap(int index) async {
     if (index == 0) {
       if (!mounted) {
         return;
       }
- 
+
       setState(() {
-        _currentNavigationIndex =
-            0;
+        _currentNavigationIndex = 0;
       });
- 
-      if (_scrollController
-          .hasClients) {
+
+      if (_scrollController.hasClients) {
         _scrollController.animateTo(
           0,
-          duration:
-              const Duration(
-            milliseconds: 250,
-          ),
-          curve:
-              Curves.easeOutCubic,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutCubic,
         );
       }
- 
+
       return;
     }
- 
+
     if (!mounted) {
       return;
     }
- 
+
     setState(() {
-      _currentNavigationIndex =
-          index;
+      _currentNavigationIndex = index;
     });
- 
+
     switch (index) {
       case 1:
-  await Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => const ShortsScreen(),
-    ),
-  );
-  break;
- 
+        await Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const ShortsScreen()));
+        break;
+
       case 3:
         await Navigator.of(
           context,
-        ).push(
-          MaterialPageRoute(
-            builder: (_) =>
-                const BookmarkScreen(),
-          ),
-        );
- 
+        ).push(MaterialPageRoute(builder: (_) => const BookmarkScreen()));
+
         // Refresh posts when returning
         // so bookmark state is synchronized.
         if (mounted) {
           await _loadPosts();
         }
         break;
- 
+
       case 4:
         await Navigator.of(
           context,
-        ).push(
-          MaterialPageRoute(
-            builder: (_) =>
-                const SettingsScreen(),
-          ),
-        );
+        ).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
         break;
     }
- 
+
     if (!mounted) {
       return;
     }
- 
+
     setState(() {
-      _currentNavigationIndex =
-          0;
+      _currentNavigationIndex = 0;
     });
   }
- 
+
   // ============================================================
   // CREATE POST
   // ============================================================
- 
-  Future<void>
-      _openCreatePost() async {
+
+  Future<void> _openCreatePost() async {
     await Navigator.of(
       context,
-    ).push(
-      MaterialPageRoute(
-        builder: (_) =>
-            const CreatePostScreen(),
-      ),
-    );
- 
+    ).push(MaterialPageRoute(builder: (_) => const CreatePostScreen()));
+
     if (!mounted) {
       return;
     }
- 
+
     setState(() {
-      _currentNavigationIndex =
-          0;
+      _currentNavigationIndex = 0;
     });
- 
+
     await _loadPosts();
   }
 
-    // ============================================================
+  // ============================================================
   // PROFILE NAVIGATION (UPDATED FOR IMAGE SYNCHRONIZATION)
   // ============================================================
 
   // Opens the profile of whoever wrote a post. Your own posts go to
   // your own profile; everyone else gets the public profile screen
   // (with a Follow button).
-  Future<void> _openAuthorProfile(
-    Map<String, dynamic> author,
-  ) async {
+  Future<void> _openAuthorProfile(Map<String, dynamic> author) async {
     final authorId =
-        author['_id']?.toString() ??
-        author['id']?.toString() ??
-        '';
+        author['_id']?.toString() ?? author['id']?.toString() ?? '';
 
     if (authorId.isEmpty) return;
 
@@ -2609,10 +2079,8 @@ const SizedBox(height: 8),
 
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => UserProfileScreen(
-          userId: authorId,
-          initialUser: author,
-        ),
+        builder: (_) =>
+            UserProfileScreen(userId: authorId, initialUser: author),
       ),
     );
   }
@@ -2621,11 +2089,7 @@ const SizedBox(height: 8),
     // Await the pop result from the Profile Screen stack
     final dynamic profileChanged = await Navigator.of(
       context,
-    ).push(
-      MaterialPageRoute(
-        builder: (_) => const ProfileScreen(),
-      ),
-    );
+    ).push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
 
     if (!mounted) {
       return;
@@ -2643,90 +2107,45 @@ const SizedBox(height: 8),
   // NOTIFICATIONS
   // ============================================================
 
-  Future<void>
-      _openNotifications() async {
+  Future<void> _openNotifications() async {
     await Navigator.of(
       context,
-    ).push(
-      MaterialPageRoute(
-        builder: (_) =>
-            const NotificationsScreen(),
-      ),
-    );
+    ).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
   }
 
   // ============================================================
   // POST OPTIONS
   // ============================================================
 
-  void _showPostOptions(
-    Map<String, dynamic> post,
-  ) {
+  void _showPostOptions(Map<String, dynamic> post) {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: _surface,
       showDragHandle: true,
-      builder: (
-        sheetContext,
-      ) {
+      builder: (sheetContext) {
         return SafeArea(
           child: Column(
-            mainAxisSize:
-                MainAxisSize.min,
+            mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading:
-                    Icon(
-                  Icons
-                      .link_rounded,
-                  color: _text,
-                ),
-                title:
-                    Text(
-                  'Copy post ID',
-                  style:
-                      TextStyle(
-                    color: _text,
-                  ),
-                ),
+                leading: Icon(Icons.link_rounded, color: _text),
+                title: Text('Copy post ID', style: TextStyle(color: _text)),
                 onTap: () {
-                  Navigator.pop(
-                    sheetContext,
-                  );
+                  Navigator.pop(sheetContext);
 
-                  _showMessage(
-                    'Post ID copied',
-                  );
+                  _showMessage('Post ID copied');
                 },
               ),
               ListTile(
-                leading:
-                    Icon(
-                  Icons
-                      .flag_outlined,
-                  color: _text,
-                ),
-                title:
-                    Text(
-                  'Report post',
-                  style:
-                      TextStyle(
-                    color: _text,
-                  ),
-                ),
+                leading: Icon(Icons.flag_outlined, color: _text),
+                title: Text('Report post', style: TextStyle(color: _text)),
                 onTap: () {
-                  Navigator.pop(
-                    sheetContext,
-                  );
+                  Navigator.pop(sheetContext);
 
-                  _showMessage(
-                    'Report feature coming soon',
-                  );
+                  _showMessage('Report feature coming soon');
                 },
               ),
-              const SizedBox(
-                height: 8,
-              ),
+              const SizedBox(height: 8),
             ],
           ),
         );
@@ -2738,61 +2157,30 @@ const SizedBox(height: 8),
   // AVATAR
   // ============================================================
 
-  Widget _avatar(
-    dynamic image,
-    String name,
-    double radius,
-  ) {
-    final value =
-        image
-                ?.toString()
-                .trim() ??
-            '';
+  Widget _avatar(dynamic image, String name, double radius) {
+    final value = image?.toString().trim() ?? '';
 
     Widget fallback() {
-      final trimmed =
-          name.trim();
+      final trimmed = name.trim();
 
-      final letter =
-          trimmed.isEmpty
-              ? '?'
-              : trimmed
-                  .substring(
-                    0,
-                    1,
-                  )
-                  .toUpperCase();
+      final letter = trimmed.isEmpty
+          ? '?'
+          : trimmed.substring(0, 1).toUpperCase();
 
       return Container(
-        width:
-            radius * 2,
-        height:
-            radius * 2,
-        alignment:
-            Alignment.center,
-        decoration:
-            BoxDecoration(
-          shape:
-              BoxShape.circle,
-          color:
-              _dark
-                  ? const Color(
-                      0xFF25282D,
-                    )
-                  : const Color(
-                      0xFFE4E7EB,
-                    ),
+        width: radius * 2,
+        height: radius * 2,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: _dark ? const Color(0xFF25282D) : const Color(0xFFE4E7EB),
         ),
-        child:
-            Text(
+        child: Text(
           letter,
-          style:
-              TextStyle(
+          style: TextStyle(
             color: _text,
-            fontSize:
-                radius * .72,
-            fontWeight:
-                FontWeight.w800,
+            fontSize: radius * .72,
+            fontWeight: FontWeight.w800,
           ),
         ),
       );
@@ -2802,49 +2190,27 @@ const SizedBox(height: 8),
       return fallback();
     }
 
-    final bytes =
-        ApiService.dataUrlToBytes(
-      value,
-    );
+    final bytes = ApiService.dataUrlToBytes(value);
 
     if (bytes != null) {
       return CircleAvatar(
-        radius:
-            radius,
-        backgroundColor:
-            Colors.transparent,
-        backgroundImage:
-            MemoryImage(
-          Uint8List.fromList(
-            bytes,
-          ),
-        ),
+        radius: radius,
+        backgroundColor: Colors.transparent,
+        backgroundImage: MemoryImage(Uint8List.fromList(bytes)),
       );
     }
 
-    final url =
-        ApiService.normalizeImageUrl(
-      value,
-    );
+    final url = ApiService.normalizeImageUrl(value);
 
     if (url == null) {
       return fallback();
     }
 
     return CircleAvatar(
-      radius:
-          radius,
-      backgroundColor:
-          Colors.transparent,
-      backgroundImage:
-          NetworkImage(
-        url,
-      ),
-      onBackgroundImageError:
-          (
-        _,
-        __,
-      ) {},
+      radius: radius,
+      backgroundColor: Colors.transparent,
+      backgroundImage: NetworkImage(url),
+      onBackgroundImageError: (_, __) {},
     );
   }
 
@@ -2852,44 +2218,26 @@ const SizedBox(height: 8),
   // DISPLAY NAME
   // ============================================================
 
-  String _displayName(
-    Map<String, dynamic> user,
-  ) {
-    final displayName =
-        user['displayName']
-                ?.toString()
-                .trim() ??
-            '';
+  String _displayName(Map<String, dynamic> user) {
+    final displayName = user['displayName']?.toString().trim() ?? '';
 
     if (displayName.isNotEmpty) {
       return displayName;
     }
 
-    final name =
-        user['name']
-                ?.toString()
-                .trim() ??
-            '';
+    final name = user['name']?.toString().trim() ?? '';
 
     if (name.isNotEmpty) {
       return name;
     }
 
-    final fullName =
-        user['fullName']
-                ?.toString()
-                .trim() ??
-            '';
+    final fullName = user['fullName']?.toString().trim() ?? '';
 
     if (fullName.isNotEmpty) {
       return fullName;
     }
 
-    final username =
-        user['username']
-                ?.toString()
-                .trim() ??
-            '';
+    final username = user['username']?.toString().trim() ?? '';
 
     if (username.isNotEmpty) {
       return username;
@@ -2902,22 +2250,15 @@ const SizedBox(height: 8),
   // USERNAME
   // ============================================================
 
-  String _username(
-    Map<String, dynamic> user,
-  ) {
-    return user['username']
-            ?.toString()
-            .trim() ??
-        '';
+  String _username(Map<String, dynamic> user) {
+    return user['username']?.toString().trim() ?? '';
   }
 
   // ============================================================
   // TIME AGO
   // ============================================================
 
-  String _timeAgo(
-    dynamic value,
-  ) {
+  String _timeAgo(dynamic value) {
     if (value == null) {
       return '';
     }
@@ -2927,58 +2268,44 @@ const SizedBox(height: 8),
     if (value is DateTime) {
       date = value;
     } else {
-      date =
-          DateTime.tryParse(
-        value.toString(),
-      );
+      date = DateTime.tryParse(value.toString());
     }
 
     if (date == null) {
       return '';
     }
 
-    final now =
-        DateTime.now();
+    final now = DateTime.now();
 
-    final difference =
-        now.difference(
-      date.toLocal(),
-    );
+    final difference = now.difference(date.toLocal());
 
     if (difference.isNegative) {
       return 'now';
     }
 
-    if (difference.inSeconds <
-        60) {
+    if (difference.inSeconds < 60) {
       return 'now';
     }
 
-    if (difference.inMinutes <
-        60) {
+    if (difference.inMinutes < 60) {
       return '${difference.inMinutes}m';
     }
 
-    if (difference.inHours <
-        24) {
+    if (difference.inHours < 24) {
       return '${difference.inHours}h';
     }
 
-    if (difference.inDays <
-        7) {
+    if (difference.inDays < 7) {
       return '${difference.inDays}d';
     }
 
-    if (difference.inDays <
-        365) {
-      final weeks =
-          difference.inDays ~/ 7;
+    if (difference.inDays < 365) {
+      final weeks = difference.inDays ~/ 7;
 
       return '${weeks}w';
     }
 
-    final years =
-        difference.inDays ~/ 365;
+    final years = difference.inDays ~/ 365;
 
     return '${years}y';
   }
@@ -2987,16 +2314,13 @@ const SizedBox(height: 8),
   // COUNT FORMAT
   // ============================================================
 
-  String _formatCount(
-    int value,
-  ) {
+  String _formatCount(int value) {
     if (value < 1000) {
       return value.toString();
     }
 
     if (value < 1000000) {
-      final number =
-          value / 1000;
+      final number = value / 1000;
 
       if (number >= 100) {
         return '${number.toStringAsFixed(0)}K';
@@ -3009,8 +2333,7 @@ const SizedBox(height: 8),
       return '${number.toStringAsFixed(1)}K';
     }
 
-    final number =
-        value / 1000000;
+    final number = value / 1000000;
 
     if (number >= 100) {
       return '${number.toStringAsFixed(0)}M';
@@ -3023,19 +2346,9 @@ const SizedBox(height: 8),
   // FRIENDLY ERROR
   // ============================================================
 
-  String _friendlyError(
-    dynamic error,
-    String fallback,
-  ) {
+  String _friendlyError(dynamic error, String fallback) {
     final message =
-        error
-                ?.toString()
-                .replaceFirst(
-                  'Exception: ',
-                  '',
-                )
-                .trim() ??
-            '';
+        error?.toString().replaceFirst('Exception: ', '').trim() ?? '';
 
     if (message.isEmpty) {
       return fallback;
@@ -3048,30 +2361,18 @@ const SizedBox(height: 8),
   // MESSAGE
   // ============================================================
 
-  void _showMessage(
-    String message,
-  ) {
+  void _showMessage(String message) {
     if (!mounted) {
       return;
     }
 
-    ScaffoldMessenger.of(
-      context,
-    ).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(
+    ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content:
-            Text(message),
-        behavior:
-            SnackBarBehavior
-                .floating,
-        duration:
-            const Duration(
-          seconds: 2,
-        ),
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -3081,171 +2382,107 @@ const SizedBox(height: 8),
   // ============================================================
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          _background,
+      backgroundColor: _background,
 
       extendBody: true,
 
       // ========================================================
       // APP BAR
       // ========================================================
-
       appBar: AppBar(
-        backgroundColor:
-            _surface,
-        surfaceTintColor:
-            Colors.transparent,
+        backgroundColor: _surface,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
-        scrolledUnderElevation:
-            0,
+        scrolledUnderElevation: 0,
         centerTitle: true,
 
         // Hairline under the app bar, matching the line above the
         // bottom navigation so the two bars frame the feed evenly.
-        shape: Border(
-          bottom: BorderSide(
-            color: _divider,
-            width: 0.8,
-          ),
+        shape: Border(bottom: BorderSide(color: _divider, width: 0.8)),
+
+        leading: IconButton(
+          tooltip: 'Profile',
+          onPressed: _openProfile,
+          icon: _loadingUser
+              ? SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: _muted,
+                  ),
+                )
+              : _avatar(
+                  _currentUser?['avatar'],
+                  _displayName(_currentUser ?? {}),
+                  16,
+                ),
         ),
 
-        leading:
-            IconButton(
-          tooltip:
-              'Profile',
-          onPressed:
-              _openProfile,
-          icon:
-              _loadingUser
-                  ? SizedBox(
-                      width: 22,
-                      height: 22,
-                      child:
-                          CircularProgressIndicator(
-                        strokeWidth:
-                            2,
-                        color:
-                            _muted,
-                      ),
-                    )
-                  : _avatar(
-                      _currentUser?[
-                          'avatar'],
-                      _displayName(
-                        _currentUser ??
-                            {},
-                      ),
-                      16,
-                    ),
-        ),
-
-        title:
-            Text(
+        title: Text(
           'MicroBlog',
-          style:
-              TextStyle(
+          style: TextStyle(
             color: _text,
             fontSize: 20,
-            fontWeight:
-                FontWeight.w900,
-            letterSpacing:
-                -.4,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -.4,
           ),
         ),
 
         actions: [
-  IconButton(
-    tooltip: 'Search',
-    onPressed: () async {
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const SearchScreen(),
-        ),
-      );
-    },
-    icon: Icon(
-      CupertinoIcons.search,
-      color: _text,
-      size: 25,
-    ),
-  ),
-  IconButton(
-    tooltip: 'Notifications',
-    onPressed: _openNotifications,
-    icon: Icon(
-      CupertinoIcons.bell,
-      color: _text,
-      size: 25,
-    ),
-  ),
-],
+          IconButton(
+            tooltip: 'Search',
+            onPressed: () async {
+              await Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const SearchScreen()));
+            },
+            icon: Icon(CupertinoIcons.search, color: _text, size: 25),
+          ),
+          IconButton(
+            tooltip: 'Notifications',
+            onPressed: _openNotifications,
+            icon: Icon(CupertinoIcons.bell, color: _text, size: 25),
+          ),
+        ],
+      ),
 
-),
       // ========================================================
       // FEED
       // ========================================================
-
-      body:
-          RefreshIndicator(
+      body: RefreshIndicator(
         color: _accent,
-        onRefresh:
-            _refresh,
-        child:
-            CustomScrollView(
-          controller:
-              _scrollController,
-          physics:
-              const AlwaysScrollableScrollPhysics(),
+        onRefresh: _refresh,
+        child: CustomScrollView(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             if (_loadingPosts)
               const SliverFillRemaining(
-                hasScrollBody:
-                    false,
-                child:
-                    Center(
-                  child:
-                      CircularProgressIndicator(
-                    color:
-                        _accent,
-                  ),
-                ),
+                hasScrollBody: false,
+                child: Center(child: CircularProgressIndicator(color: _accent)),
               )
             else if (_posts.isEmpty)
               SliverFillRemaining(
-                hasScrollBody:
-                    false,
-                child:
-                    Center(
-                  child:
-                      Column(
-                    mainAxisSize:
-                        MainAxisSize
-                            .min,
+                hasScrollBody: false,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        Icons
-                            .dynamic_feed_outlined,
+                        Icons.dynamic_feed_outlined,
                         size: 46,
-                        color:
-                            _muted,
+                        color: _muted,
                       ),
-                      const SizedBox(
-                        height: 12,
-                      ),
+                      const SizedBox(height: 12),
                       Text(
                         'No posts yet',
-                        style:
-                            TextStyle(
-                          color:
-                              _muted,
-                          fontSize:
-                              16,
-                          fontWeight:
-                              FontWeight.w600,
+                        style: TextStyle(
+                          color: _muted,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -3254,40 +2491,18 @@ const SizedBox(height: 8),
               )
             else
               SliverList(
-                delegate:
-                    SliverChildBuilderDelegate(
-                  (
-                    context,
-                    index,
-                  ) {
-                    final raw =
-                        _posts[
-                            index];
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final raw = _posts[index];
 
-                    if (raw
-                        is! Map) {
-                      return const SizedBox
-                          .shrink();
-                    }
+                  if (raw is! Map) {
+                    return const SizedBox.shrink();
+                  }
 
-                    return _postCard(
-                      Map<String,
-                          dynamic>.from(
-                        raw,
-                      ),
-                    );
-                  },
-                  childCount:
-                      _posts.length,
-                ),
+                  return _postCard(Map<String, dynamic>.from(raw));
+                }, childCount: _posts.length),
               ),
 
-            const SliverToBoxAdapter(
-              child:
-                  SizedBox(
-                height: 100,
-              ),
-            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
         ),
       ),
@@ -3298,11 +2513,7 @@ const SizedBox(height: 8),
       // When hidden, this is NULL.
       // Therefore Flutter gives the feed that entire area.
       // ========================================================
-
-      bottomNavigationBar:
-          _showBottomNavigation
-              ? _bottomNavigation()
-              : null,
+      bottomNavigationBar: _showBottomNavigation ? _bottomNavigation() : null,
     );
   }
 }
@@ -3314,8 +2525,7 @@ const SizedBox(height: 8),
 // HomeScreen's inherited dependencies while it is being dismissed.
 // ==================================================================
 
-class _CommentsSheet
-    extends StatefulWidget {
+class _CommentsSheet extends StatefulWidget {
   final List<dynamic> comments;
 
   final String postId;
@@ -3339,14 +2549,11 @@ class _CommentsSheet
   });
 
   @override
-  State<_CommentsSheet> createState() =>
-      _CommentsSheetState();
+  State<_CommentsSheet> createState() => _CommentsSheetState();
 }
 
-class _CommentsSheetState
-    extends State<_CommentsSheet> {
-  late final TextEditingController
-      _controller;
+class _CommentsSheetState extends State<_CommentsSheet> {
+  late final TextEditingController _controller;
 
   late List<dynamic> _comments;
 
@@ -3356,13 +2563,9 @@ class _CommentsSheetState
   void initState() {
     super.initState();
 
-    _controller =
-        TextEditingController();
+    _controller = TextEditingController();
 
-    _comments =
-        List<dynamic>.from(
-      widget.comments,
-    );
+    _comments = List<dynamic>.from(widget.comments);
   }
 
   @override
@@ -3377,11 +2580,9 @@ class _CommentsSheetState
   // ============================================================
 
   Future<void> _sendComment() async {
-    final text =
-        _controller.text.trim();
+    final text = _controller.text.trim();
 
-    if (text.isEmpty ||
-        _sending) {
+    if (text.isEmpty || _sending) {
       return;
     }
 
@@ -3390,21 +2591,16 @@ class _CommentsSheetState
     });
 
     try {
-      final result =
-          await ApiService.createComment(
+      final result = await ApiService.createComment(
         postId: widget.postId,
         content: text,
       );
 
       if (result['success'] != true) {
-        throw Exception(
-          result['message'] ??
-              'Unable to add comment',
-        );
+        throw Exception(result['message'] ?? 'Unable to add comment');
       }
 
-      final comment =
-          result['data']?['comment'];
+      final comment = result['data']?['comment'];
 
       if (!mounted) {
         return;
@@ -3412,9 +2608,7 @@ class _CommentsSheetState
 
       setState(() {
         if (comment != null) {
-          _comments.add(
-            comment,
-          );
+          _comments.add(comment);
         }
 
         _controller.clear();
@@ -3424,22 +2618,10 @@ class _CommentsSheetState
         return;
       }
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text(
-            error
-                .toString()
-                .replaceFirst(
-                  'Exception: ',
-                  '',
-                ),
-          ),
-          behavior:
-              SnackBarBehavior
-                  .floating,
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+          behavior: SnackBarBehavior.floating,
         ),
       );
     } finally {
@@ -3455,44 +2637,26 @@ class _CommentsSheetState
   // AUTHOR HELPERS
   // ============================================================
 
-  String _displayName(
-    Map<String, dynamic> user,
-  ) {
-    final displayName =
-        user['displayName']
-                ?.toString()
-                .trim() ??
-            '';
+  String _displayName(Map<String, dynamic> user) {
+    final displayName = user['displayName']?.toString().trim() ?? '';
 
     if (displayName.isNotEmpty) {
       return displayName;
     }
 
-    final name =
-        user['name']
-                ?.toString()
-                .trim() ??
-            '';
+    final name = user['name']?.toString().trim() ?? '';
 
     if (name.isNotEmpty) {
       return name;
     }
 
-    final fullName =
-        user['fullName']
-                ?.toString()
-                .trim() ??
-            '';
+    final fullName = user['fullName']?.toString().trim() ?? '';
 
     if (fullName.isNotEmpty) {
       return fullName;
     }
 
-    final username =
-        user['username']
-                ?.toString()
-                .trim() ??
-            '';
+    final username = user['username']?.toString().trim() ?? '';
 
     if (username.isNotEmpty) {
       return username;
@@ -3501,228 +2665,124 @@ class _CommentsSheetState
     return 'User';
   }
 
-  String _username(
-    Map<String, dynamic> user,
-  ) {
-    return user['username']
-            ?.toString()
-            .trim() ??
-        '';
+  String _username(Map<String, dynamic> user) {
+    return user['username']?.toString().trim() ?? '';
   }
 
   // ============================================================
   // AVATAR
   // ============================================================
 
-  Widget _avatar(
-    dynamic image,
-    String name,
-    double radius,
-  ) {
-    final value =
-        image
-                ?.toString()
-                .trim() ??
-            '';
+  Widget _avatar(dynamic image, String name, double radius) {
+    final value = image?.toString().trim() ?? '';
 
-    final letter =
-        name.trim().isEmpty
-            ? '?'
-            : name
-                .trim()
-                .substring(
-                  0,
-                  1,
-                )
-                .toUpperCase();
+    final letter = name.trim().isEmpty
+        ? '?'
+        : name.trim().substring(0, 1).toUpperCase();
 
     if (value.isEmpty) {
       return Container(
-        width:
-            radius * 2,
-        height:
-            radius * 2,
-        alignment:
-            Alignment.center,
-        decoration:
-            BoxDecoration(
-          shape:
-              BoxShape.circle,
-          color:
-              widget.composerColor,
+        width: radius * 2,
+        height: radius * 2,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: widget.composerColor,
         ),
-        child:
-            Text(
+        child: Text(
           letter,
-          style:
-              TextStyle(
-            color:
-                widget.textColor,
-            fontWeight:
-                FontWeight.w800,
+          style: TextStyle(
+            color: widget.textColor,
+            fontWeight: FontWeight.w800,
           ),
         ),
       );
     }
 
-    final bytes =
-        ApiService.dataUrlToBytes(
-      value,
-    );
+    final bytes = ApiService.dataUrlToBytes(value);
 
     if (bytes != null) {
       return CircleAvatar(
-        radius:
-            radius,
-        backgroundImage:
-            MemoryImage(
-          Uint8List.fromList(
-            bytes,
-          ),
-        ),
+        radius: radius,
+        backgroundImage: MemoryImage(Uint8List.fromList(bytes)),
       );
     }
 
-    final url =
-        ApiService.normalizeImageUrl(
-      value,
-    );
+    final url = ApiService.normalizeImageUrl(value);
 
     if (url == null) {
       return Container(
-        width:
-            radius * 2,
-        height:
-            radius * 2,
-        alignment:
-            Alignment.center,
-        decoration:
-            BoxDecoration(
-          shape:
-              BoxShape.circle,
-          color:
-              widget.composerColor,
+        width: radius * 2,
+        height: radius * 2,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: widget.composerColor,
         ),
-        child:
-            Text(
+        child: Text(
           letter,
-          style:
-              TextStyle(
-            color:
-                widget.textColor,
-            fontWeight:
-                FontWeight.w800,
+          style: TextStyle(
+            color: widget.textColor,
+            fontWeight: FontWeight.w800,
           ),
         ),
       );
     }
 
-    return CircleAvatar(
-      radius:
-          radius,
-      backgroundImage:
-          NetworkImage(
-        url,
-      ),
-    );
+    return CircleAvatar(radius: radius, backgroundImage: NetworkImage(url));
   }
 
   // ============================================================
   // BUILD COMMENT
   // ============================================================
 
-  Widget _buildComment(
-    dynamic raw,
-  ) {
-    final comment =
-        raw is Map
-            ? Map<String, dynamic>.from(
-                raw,
-              )
-            : <String, dynamic>{};
+  Widget _buildComment(dynamic raw) {
+    final comment = raw is Map
+        ? Map<String, dynamic>.from(raw)
+        : <String, dynamic>{};
 
-    final authorRaw =
-        comment['author'];
+    final authorRaw = comment['author'];
 
-    final author =
-        authorRaw is Map
-            ? Map<String, dynamic>.from(
-                authorRaw,
-              )
-            : <String, dynamic>{};
+    final author = authorRaw is Map
+        ? Map<String, dynamic>.from(authorRaw)
+        : <String, dynamic>{};
 
-    final name =
-        _displayName(
-      author,
-    );
+    final name = _displayName(author);
 
-    final username =
-        _username(
-      author,
-    );
+    final username = _username(author);
 
-    final content =
-        comment['content']
-                ?.toString() ??
-            '';
+    final content = comment['content']?.toString() ?? '';
 
     return Row(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _avatar(
-          author['avatar'],
-          name,
-          20,
-        ),
+        _avatar(author['avatar'], name, 20),
 
-        const SizedBox(
-          width: 10,
-        ),
+        const SizedBox(width: 10),
 
         Expanded(
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment
-                    .start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 name,
-                style:
-                    TextStyle(
-                  color:
-                      widget.textColor,
-                  fontWeight:
-                      FontWeight.w700,
+                style: TextStyle(
+                  color: widget.textColor,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
 
-              if (username
-                  .isNotEmpty)
+              if (username.isNotEmpty)
                 Text(
                   '@$username',
-                  style:
-                      TextStyle(
-                    color:
-                        widget.mutedColor,
-                    fontSize:
-                        12,
-                  ),
+                  style: TextStyle(color: widget.mutedColor, fontSize: 12),
                 ),
 
-              const SizedBox(
-                height: 5,
-              ),
+              const SizedBox(height: 5),
 
               Text(
                 content,
-                style:
-                    TextStyle(
-                  color:
-                      widget.textColor,
-                  height:
-                      1.4,
-                ),
+                style: TextStyle(color: widget.textColor, height: 1.4),
               ),
             ],
           ),
@@ -3736,288 +2796,133 @@ class _CommentsSheetState
   // ============================================================
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return AnimatedPadding(
-      duration:
-          const Duration(
-        milliseconds: 180,
+      duration: const Duration(milliseconds: 180),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      padding:
-          EdgeInsets.only(
-        bottom:
-            MediaQuery.of(
-          context,
-        ).viewInsets.bottom,
-      ),
-      child:
-          SizedBox(
-        height:
-            MediaQuery.of(
-                  context,
-                ).size.height *
-                .78,
-        child:
-            Column(
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * .78,
+        child: Column(
           children: [
-            const SizedBox(
-              height: 10,
-            ),
+            const SizedBox(height: 10),
 
             Container(
               width: 42,
               height: 4,
-              decoration:
-                  BoxDecoration(
-                color:
-                    widget
-                        .mutedColor
-                        .withOpacity(
-                  .4,
-                ),
-                borderRadius:
-                    BorderRadius
-                        .circular(
-                  99,
-                ),
+              decoration: BoxDecoration(
+                color: widget.mutedColor.withOpacity(.4),
+                borderRadius: BorderRadius.circular(99),
               ),
             ),
 
             Padding(
-              padding:
-                  const EdgeInsets
-                      .fromLTRB(
-                20,
-                12,
-                10,
-                12,
-              ),
+              padding: const EdgeInsets.fromLTRB(20, 12, 10, 12),
               child: Row(
                 children: [
                   Expanded(
-                    child:
-                        Text(
+                    child: Text(
                       'Comments',
-                      style:
-                          TextStyle(
-                        color:
-                            widget
-                                .textColor,
-                        fontSize:
-                            20,
-                        fontWeight:
-                            FontWeight
-                                .w800,
+                      style: TextStyle(
+                        color: widget.textColor,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
 
                   IconButton(
                     onPressed: () {
-                      Navigator.of(
-                        context,
-                      ).pop(
-                        _comments.length,
-                      );
+                      Navigator.of(context).pop(_comments.length);
                     },
-                    icon:
-                        Icon(
-                      Icons
-                          .close_rounded,
-                      color:
-                          widget
-                              .textColor,
-                    ),
+                    icon: Icon(Icons.close_rounded, color: widget.textColor),
                   ),
                 ],
               ),
             ),
 
-            Divider(
-              height: 1,
-              color:
-                  widget
-                      .dividerColor,
-            ),
+            Divider(height: 1, color: widget.dividerColor),
 
             // ==================================================
             // COMMENTS LIST
             // ==================================================
-
             Expanded(
-              child:
-                  _comments.isEmpty
-                      ? Center(
-                          child:
-                              Text(
-                            'No comments yet',
-                            style:
-                                TextStyle(
-                              color:
-                                  widget
-                                      .mutedColor,
-                            ),
-                          ),
-                        )
-                      : ListView
-                          .separated(
-                          padding:
-                              const EdgeInsets
-                                  .all(
-                            16,
-                          ),
-                          itemCount:
-                              _comments
-                                  .length,
-                          separatorBuilder:
-                              (
-                            _,
-                            __,
-                          ) =>
-                                  const SizedBox(
-                            height: 16,
-                          ),
-                          itemBuilder:
-                              (
-                            _,
-                            index,
-                          ) {
-                            return _buildComment(
-                              _comments[
-                                  index],
-                            );
-                          },
-                        ),
+              child: _comments.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No comments yet',
+                        style: TextStyle(color: widget.mutedColor),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _comments.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 16),
+                      itemBuilder: (_, index) {
+                        return _buildComment(_comments[index]);
+                      },
+                    ),
             ),
 
             // ==================================================
             // COMMENT COMPOSER
             // ==================================================
-
             Container(
-              padding:
-                  EdgeInsets.fromLTRB(
+              padding: EdgeInsets.fromLTRB(
                 14,
                 10,
                 14,
-                MediaQuery.of(
-                      context,
-                    ).viewInsets.bottom +
-                    10,
+                MediaQuery.of(context).viewInsets.bottom + 10,
               ),
-              decoration:
-                  BoxDecoration(
-                color:
-                    widget
-                        .surfaceColor,
-                border:
-                    Border(
-                  top:
-                      BorderSide(
-                    color:
-                        widget
-                            .dividerColor,
-                  ),
-                ),
+              decoration: BoxDecoration(
+                color: widget.surfaceColor,
+                border: Border(top: BorderSide(color: widget.dividerColor)),
               ),
-              child:
-                  Row(
+              child: Row(
                 children: [
                   Expanded(
-                    child:
-                        TextField(
-                      controller:
-                          _controller,
-                      minLines:
-                          1,
-                      maxLines:
-                          4,
-                      textInputAction:
-                          TextInputAction
-                              .newline,
-                      style:
-                          TextStyle(
-                        color:
-                            widget
-                                .textColor,
-                      ),
-                      decoration:
-                          InputDecoration(
-                        hintText:
-                            'Write a comment...',
-                        hintStyle:
-                            TextStyle(
-                          color:
-                              widget
-                                  .mutedColor,
+                    child: TextField(
+                      controller: _controller,
+                      minLines: 1,
+                      maxLines: 4,
+                      textInputAction: TextInputAction.newline,
+                      style: TextStyle(color: widget.textColor),
+                      decoration: InputDecoration(
+                        hintText: 'Write a comment...',
+                        hintStyle: TextStyle(color: widget.mutedColor),
+                        filled: true,
+                        fillColor: widget.composerColor,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(22),
+                          borderSide: BorderSide.none,
                         ),
-                        filled:
-                            true,
-                        fillColor:
-                            widget
-                                .composerColor,
-                        border:
-                            OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius
-                                  .circular(
-                            22,
-                          ),
-                          borderSide:
-                              BorderSide
-                                  .none,
-                        ),
-                        contentPadding:
-                            const EdgeInsets
-                                .symmetric(
-                          horizontal:
-                              16,
-                          vertical:
-                              11,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 11,
                         ),
                       ),
                     ),
                   ),
 
-                  const SizedBox(
-                    width: 8,
-                  ),
+                  const SizedBox(width: 8),
 
                   IconButton(
-                    onPressed:
-                        _sending
-                            ? null
-                            : _sendComment,
-                    style:
-                        IconButton
-                            .styleFrom(
-                      backgroundColor:
-                          const Color(
-                        0xFFFF2D78,
-                      ),
-                      foregroundColor:
-                          Colors.white,
+                    onPressed: _sending ? null : _sendComment,
+                    style: IconButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF2D78),
+                      foregroundColor: Colors.white,
                     ),
-                    icon:
-                        _sending
-                            ? const SizedBox(
-                                width:
-                                    18,
-                                height:
-                                    18,
-                                child:
-                                    CircularProgressIndicator(
-                                  strokeWidth:
-                                      2,
-                                  color:
-                                      Colors.white,
-                                ),
-                              )
-                            : const Icon(
-                                Icons
-                                    .arrow_upward_rounded,
-                              ),
+                    icon: _sending
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.arrow_upward_rounded),
                   ),
                 ],
               ),

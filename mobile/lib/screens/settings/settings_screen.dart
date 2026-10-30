@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import '../../services/api_service.dart';
+import '../auth/login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -221,17 +223,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (dialogCtx) {
         return AlertDialog(
           backgroundColor: _surface,
-
           title: Text(
             "Log out",
             style: TextStyle(color: _text, fontWeight: FontWeight.w700),
           ),
-
           content: Text(
             "Are you sure you want to log out of your MicroBlog profile?",
             style: TextStyle(color: _muted),
           ),
-
           actions: [
             TextButton(
               onPressed: () {
@@ -239,19 +238,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
               child: Text("Cancel", style: TextStyle(color: _muted)),
             ),
-
             TextButton(
-              onPressed: () {
+              onPressed: () async {
+                // Close the confirmation dialog.
                 Navigator.pop(dialogCtx);
 
-                ScaffoldMessenger.of(context)
-                  ..hideCurrentSnackBar()
-                  ..showSnackBar(
-                    const SnackBar(
-                      behavior: SnackBarBehavior.floating,
-                      content: Text("Logging out..."),
-                    ),
+                try {
+                  // Clear the saved authentication token.
+                  await ApiService.logout();
+
+                  if (!mounted) return;
+
+                  // Remove all previous screens and open Login.
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (route) => false,
                   );
+                } catch (error) {
+                  if (!mounted) return;
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Logout failed: $error")),
+                  );
+                }
               },
               child: const Text(
                 "Log Out",
