@@ -19,6 +19,7 @@ import '../settings/settings_screen.dart';
 import 'repost_modal_sheet.dart';
 import 'home_video_player.dart';
 import '../shorts/shorts_screen.dart';
+import 'post_viewer_screens.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -30,31 +31,33 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   // ============================================================
-  // COLORS
-  // ============================================================
+// COLORS
+// ============================================================
 
-  // Brand accent (pink). Used for active dots, spinners and highlights.
-  static const Color _accent = Color(0xFFFF2D78);
-  static const Color _red = Color(0xFFF91880);
-  static const Color _green = Color(0xFF00BA7C);
+static const Color _accent = Color(0xFFF91880);
+static const Color _red = Color(0xFFF91880);
+static const Color _green = Color(0xFF00BA7C);
 
-  bool get _dark => Theme.of(context).brightness == Brightness.dark;
+bool get _dark =>
+    Theme.of(context).brightness == Brightness.dark;
 
-  Color get _background =>
-      _dark ? const Color(0xFF050505) : const Color(0xFFF7F8FA);
+Color get _background =>
+    _dark ? const Color(0xFF08090B) : const Color(0xFFF7F8FA);
 
-  Color get _surface => _dark ? const Color(0xFF090A0C) : Colors.white;
+Color get _surface =>
+    _dark ? const Color(0xFF15171B) : const Color(0xFFFFFFFF);
 
-  Color get _text => _dark ? Colors.white : const Color(0xFF111318);
+Color get _text =>
+    _dark ? const Color(0xFFFFFFFF) : const Color(0xFF111318);
 
-  Color get _muted => _dark ? const Color(0xFF8D939C) : const Color(0xFF69707A);
+Color get _muted =>
+    _dark ? const Color(0xFF9297A0) : const Color(0xFF737B86);
 
-  Color get _divider =>
-      _dark ? const Color(0xFF202328) : const Color(0xFFE7E9ED);
+Color get _divider =>
+    _dark ? const Color(0xFF282B31) : const Color(0xFFE6E8EC);
 
-  Color get _composer =>
-      _dark ? const Color(0xFF17191C) : const Color(0xFFF1F3F5);
-
+Color get _composer =>
+    _dark ? const Color(0xFF202329) : const Color(0xFFF0F1F4);
   // ============================================================
   // CONTROLLERS
   // ============================================================
@@ -1192,6 +1195,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final shares = _shareCounts[id] ?? 0;
 
+    void openDetail() {
+      _openPostDetail(
+        post: post,
+        author: author,
+        content: content,
+        media: media,
+        videoMedia: videoMedia,
+        avatar: displayedAvatar,
+      );
+    }
+
     return VisibilityDetector(
       key: Key('home-post-$id'),
       onVisibilityChanged: (info) {
@@ -1200,8 +1214,16 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       },
       child: Container(
-        color: _surface,
-        child: Column(
+  margin: const EdgeInsets.symmetric(
+    horizontal: 6,
+    vertical: 1.2,
+  ),
+  decoration: BoxDecoration(
+    color: _surface,
+    borderRadius: BorderRadius.circular(22),
+  ),
+  clipBehavior: Clip.antiAlias,
+  child: Column(
           children: [
             // ------------------------------------------------------
             // REPOST LABEL
@@ -1211,8 +1233,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
                 child: Row(
                   children: [
-                    const SizedBox(width: 34),
-
                     Icon(
                       CupertinoIcons.arrow_2_squarepath,
                       size: 15,
@@ -1241,26 +1261,26 @@ class _HomeScreenState extends State<HomeScreen> {
             // POST BODY
             // ------------------------------------------------------
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-              child: Row(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => _openAuthorProfile(author),
-                    child: _avatar(displayedAvatar, name, 21),
-                  ),
+                  // ------------------------------------------------
+                  // HEADER: avatar + name/username/time + options
+                  // ------------------------------------------------
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _openAuthorProfile(author),
+                        child: _avatar(displayedAvatar, name, 21),
+                      ),
 
-                  const SizedBox(width: 11),
+                      const SizedBox(width: 11),
 
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // ------------------------------------------------
-                        // AUTHOR ROW
-                        // ------------------------------------------------
-                        Row(
+                      Expanded(
+                        child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
@@ -1342,19 +1362,30 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ],
                         ),
+                      ),
+                    ],
+                  ),
 
+                  // Everything below starts at the card's left edge.
+                  Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         // ------------------------------------------------
                         // TEXT CONTENT
                         // ------------------------------------------------
                         if (content.trim().isNotEmpty) ...[
-                          const SizedBox(height: 7),
+                          const SizedBox(height: 12),
 
-                          Text(
-                            content,
-                            style: TextStyle(
-                              color: _text,
-                              fontSize: 16,
-                              height: 1.42,
+                          GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: openDetail,
+                            child: Text(
+                              content,
+                              style: TextStyle(
+                                color: _text,
+                                fontSize: 16,
+                                height: 1.42,
+                              ),
                             ),
                           ),
                         ],
@@ -1482,9 +1513,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         if (media.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 10),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: _media(media),
+                            child: GestureDetector(
+                              onTap: openDetail,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: _media(media),
+                              ),
                             ),
                           ),
 
@@ -1496,7 +1530,18 @@ class _HomeScreenState extends State<HomeScreen> {
                             padding: const EdgeInsets.only(top: 10),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(16),
-                              child: HomeVideoPlayer(videoData: videoMedia),
+                              child: Stack(
+                                children: [
+                                  HomeVideoPlayer(videoData: videoMedia),
+                                  // Tap the video -> full screen video feed.
+                                  Positioned.fill(
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () => _openVideoFeed(id),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
 
@@ -1591,13 +1636,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
                       ],
-                    ),
                   ),
                 ],
               ),
             ),
-
-            Divider(height: 1, color: _divider),
           ],
         ),
       ),
@@ -1650,7 +1692,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       height: 22,
                       child: iconWidget,
                     )
-                  : Icon(icon, key: ValueKey(icon), size: 22, color: color),
+                  : Icon(
+                      icon,
+                      key: ValueKey(icon),
+                      size: 23,
+                      color: color,
+                      // Cupertino outline glyphs are thin; two hairline
+                      // shadows make them a touch bolder.
+                      shadows: [
+                        Shadow(color: color, offset: const Offset(.45, 0)),
+                        Shadow(color: color, offset: const Offset(-.45, 0)),
+                      ],
+                    ),
             ),
             if (showCount && count > 0) ...[
               const SizedBox(width: 5),
@@ -1658,8 +1711,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 _formatCount(count),
                 style: TextStyle(
                   color: color,
-                  fontSize: 12,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w400,
+                  fontSize: 12.5,
+                  fontWeight: active ? FontWeight.w800 : FontWeight.w600,
                 ),
               ),
             ],
@@ -1839,132 +1892,143 @@ class _HomeScreenState extends State<HomeScreen> {
   // SETTINGS
   // ============================================================
 
-  Widget _bottomNavigation() {
-    return Container(
-      decoration: BoxDecoration(
-        color: _surface,
-        border: Border(top: BorderSide(color: _divider, width: 0.8)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 62,
-          child: Row(
-            children: [
-              _bottomNavItem(
-                icon: CupertinoIcons.house,
-                activeIcon: CupertinoIcons.house_fill,
-                index: 0,
-                label: 'Home',
-              ),
-              _bottomNavItem(
-                icon: CupertinoIcons.play_rectangle,
-                activeIcon: CupertinoIcons.play_rectangle_fill,
-                index: 1,
-                label: 'Shorts',
-              ),
-              _buildCreateNavButton(),
-              _bottomNavItem(
-                icon: CupertinoIcons.bookmark,
-                activeIcon: CupertinoIcons.bookmark_fill,
-                index: 3,
-                label: 'Bookmarks',
-              ),
-              _bottomNavItem(
-                icon: Icons.settings_outlined,
-                activeIcon: Icons.settings_rounded,
-                index: 4,
-                label: 'Settings',
-              ),
-            ],
-          ),
+  
+Widget _bottomNavigation() {
+  return SafeArea(
+    top: false,
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+      child: Container(
+        height: 70,
+        decoration: BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: _divider, width: 0.8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(_dark ? .35 : .08),
+              blurRadius: 18,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            _bottomNavItem(
+              icon: Icons.home_outlined,
+              activeIcon: Icons.home_outlined,
+              index: 0,
+              label: 'Home',
+            ),
+            _bottomNavItem(
+              icon: Icons.movie_creation_outlined,
+              activeIcon: Icons.movie_creation_outlined,
+              index: 1,
+              label: 'Shorts',
+            ),
+            _buildCreateNavButton(),
+            _bottomNavItem(
+              icon: CupertinoIcons.bookmark,
+              activeIcon: CupertinoIcons.bookmark_fill,
+              index: 3,
+              label: 'Saved',
+            ),
+            _bottomNavItem(
+              icon: Icons.settings_outlined,
+              activeIcon: Icons.settings_outlined,
+              index: 4,
+              label: 'Settings',
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
-  // ============================================================
-  // BOTTOM NAV ITEM
-  // Filled, slightly larger icon + small accent dot when active.
-  // ============================================================
+Widget _bottomNavItem({
+  required IconData icon,
+  required IconData activeIcon,
+  required int index,
+  required String label,
+}) {
+  final active = _currentNavigationIndex == index;
 
-  static const double _navIconSize = 26;
-
-  Widget _bottomNavItem({
-    required IconData icon,
-    required IconData activeIcon,
-    required int index,
-    required String label,
-  }) {
-    final active = _currentNavigationIndex == index;
-
-    return Expanded(
-      child: Semantics(
-        button: true,
-        label: label,
-        child: GestureDetector(
-          onTap: () {
-            _onBottomNavigationTap(index);
-          },
-          behavior: HitTestBehavior.opaque,
+  return Expanded(
+    child: Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _onBottomNavigationTap(index),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeInOut,
+          margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 7),
+          decoration: BoxDecoration(
+            color: active ? _composer : Colors.transparent,
+            borderRadius: BorderRadius.circular(18),
+          ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Every nav icon uses the same fixed box and size, active or
-              // not, so Material and Cupertino glyphs line up.
               SizedBox(
-                width: _navIconSize,
-                height: _navIconSize,
+                width: 26,
+                height: 26,
                 child: Center(
                   child: Icon(
                     active ? activeIcon : icon,
-                    size: 26,
+                    size: 24,
                     color: active ? _text : _muted,
                   ),
                 ),
               ),
               const SizedBox(height: 4),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                width: active ? 5 : 0,
-                height: active ? 5 : 0,
-                decoration: BoxDecoration(
-                  color: _accent,
-                  shape: BoxShape.circle,
+              Text(
+                label,
+                maxLines: 1,
+                style: TextStyle(
+                  color: active ? _text : _muted,
+                  fontSize: 10.5,
+                  fontWeight: active ? FontWeight.w800 : FontWeight.w500,
                 ),
               ),
             ],
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
-  // ============================================================
-  // CREATE (+) BUTTON
-  // ============================================================
-
-  Widget _buildCreateNavButton() {
-    return Expanded(
-      child: Center(
-        child: Semantics(
-          button: true,
-          label: 'Create post',
-          child: GestureDetector(
-            onTap: () async {
-              await _openCreatePost();
-            },
-            child: Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(color: _text, shape: BoxShape.circle),
-              child: Icon(Icons.add_rounded, size: 30, color: _surface),
+Widget _buildCreateNavButton() {
+  return Expanded(
+    child: Center(
+      child: Semantics(
+        button: true,
+        label: 'Create post',
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _openCreatePost,
+          child: Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: _dark ? Colors.white : const Color(0xFF111318),
+              borderRadius: BorderRadius.circular(17),
+            ),
+            child: Icon(
+              CupertinoIcons.plus,
+              size: 28,
+              color: _dark ? const Color(0xFF111318) : Colors.white,
             ),
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
+
 
   // ============================================================
   // BOTTOM NAV ACTION
@@ -2061,6 +2125,144 @@ class _HomeScreenState extends State<HomeScreen> {
   // Opens the profile of whoever wrote a post. Your own posts go to
   // your own profile; everyone else gets the public profile screen
   // (with a Follow button).
+  // ============================================================
+  // POST DETAIL + VIDEO FEED
+  // ============================================================
+
+  Map<String, dynamic> _postUiState(String id) {
+    return {
+      'liked': _likedPosts.contains(id),
+      'saved': _bookmarkedPosts.contains(id),
+      'likes': _likeCounts[id] ?? 0,
+      'comments': _commentCounts[id] ?? 0,
+      'reposts': _repostCounts[id] ?? 0,
+      'shares': _shareCounts[id] ?? 0,
+      'views': _viewCounts[id] ?? 0,
+    };
+  }
+
+  String get _myId =>
+      _currentUser?['_id']?.toString() ?? _currentUser?['id']?.toString() ?? '';
+
+  dynamic _avatarFor(Map<String, dynamic> author) {
+    final authorId = author['_id']?.toString() ?? author['id']?.toString() ?? '';
+
+    if (_myId.isNotEmpty && authorId == _myId) {
+      return _currentUser?['avatar'];
+    }
+
+    return author['avatar'];
+  }
+
+  Future<void> _openPostDetail({
+    required Map<String, dynamic> post,
+    required Map<String, dynamic> author,
+    required String content,
+    required String media,
+    required String videoMedia,
+    required dynamic avatar,
+  }) async {
+    final id = post['_id']?.toString() ?? '';
+
+    if (id.isEmpty) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PostDetailScreen(
+          postId: id,
+          author: author,
+          content: content,
+          media: media,
+          videoMedia: videoMedia,
+          location: post['location']?.toString().trim() ?? '',
+          avatar: avatar,
+          createdAt: post['createdAt'],
+          currentUserId: _myId,
+          readState: _postUiState,
+          onLike: () => _toggleLike(id),
+          onComment: () => _openComments(id),
+          onRepost: () => _repost(post),
+          onShare: () => _sharePost(post),
+          onBookmark: () => _toggleBookmark(id),
+          onOpenAuthor: () => _openAuthorProfile(author),
+        ),
+      ),
+    );
+  }
+
+  // Every video post in the feed, in feed order (a plain repost shows
+  // the original post's video, same rule as the post card).
+  List<Map<String, dynamic>> _videoFeedItems() {
+    final items = <Map<String, dynamic>>[];
+
+    for (final raw in _posts) {
+      if (raw is! Map) continue;
+
+      final post = Map<String, dynamic>.from(raw);
+
+      final id = post['_id']?.toString() ?? '';
+
+      if (id.isEmpty) continue;
+
+      final repostOfRaw = post['repostOf'];
+
+      final repostOf = (repostOfRaw is Map && repostOfRaw.isNotEmpty)
+          ? Map<String, dynamic>.from(repostOfRaw)
+          : null;
+
+      final caption = post['content']?.toString().trim() ?? '';
+
+      final Map<String, dynamic> source =
+          (repostOf != null && caption.isEmpty) ? repostOf : post;
+
+      final video = (source['video'] ?? source['videoUrl'])?.toString().trim() ?? '';
+
+      if (video.isEmpty) continue;
+
+      final authorRaw = source['author'];
+
+      final author = authorRaw is Map
+          ? Map<String, dynamic>.from(authorRaw)
+          : <String, dynamic>{};
+
+      items.add({
+        'id': id,
+        'post': post,
+        'author': author,
+        'videoData': video,
+        'name': _displayName(author),
+        'username': _username(author),
+        'avatar': _avatarFor(author),
+        'content': source['content']?.toString() ?? '',
+      });
+    }
+
+    return items;
+  }
+
+  Future<void> _openVideoFeed(String startId) async {
+    final items = _videoFeedItems();
+
+    if (items.isEmpty) return;
+
+    final index = items.indexWhere((item) => item['id'] == startId);
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => VideoFeedScreen(
+          items: items,
+          initialIndex: index < 0 ? 0 : index,
+          readState: _postUiState,
+          onLike: (id) => _toggleLike(id),
+          onComment: (id) => _openComments(id),
+          onRepost: (post) => _repost(post),
+          onShare: (post) => _sharePost(post),
+          onOpenAuthor: (author) => _openAuthorProfile(author),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openAuthorProfile(Map<String, dynamic> author) async {
     final authorId =
         author['_id']?.toString() ?? author['id']?.toString() ?? '';
@@ -2411,7 +2613,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   height: 22,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: _muted,
+                    color: _accent,
                   ),
                 )
               : _avatar(

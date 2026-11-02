@@ -1,12 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'app/app.dart';
 
-// GLOBAL VALUE NOTIFIER CONTROLLER
-// This sits at the top level so your navigation drawer can access it directly.
-final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier<ThemeMode>(
-  ThemeMode.dark,
-);
+final ValueNotifier<ThemeMode> themeNotifier =
+    ValueNotifier<ThemeMode>(ThemeMode.dark);
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final prefs = await SharedPreferences.getInstance();
+
+  final savedTheme = prefs.getString('microblog_theme');
+
+  themeNotifier.value = savedTheme == 'light'
+      ? ThemeMode.light
+      : ThemeMode.dark;
+
   runApp(const MicroBlogApp());
 }

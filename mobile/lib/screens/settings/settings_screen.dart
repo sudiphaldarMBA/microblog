@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import '../../services/api_service.dart';
 import '../auth/login_screen.dart';
+import '../../main.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -18,18 +20,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool get _dark => Theme.of(context).brightness == Brightness.dark;
 
   Color get _background =>
-      _dark ? const Color(0xFF050505) : const Color(0xFFF7F8FA);
+      _dark ? const Color(0xFF08090B) : const Color(0xFFF7F8FA);
 
-  Color get _surface => _dark ? const Color(0xFF090A0C) : Colors.white;
+  Color get _surface =>
+      _dark ? const Color(0xFF15171B) : const Color(0xFFFFFFFF);
 
-  Color get _text => _dark ? Colors.white : const Color(0xFF111111);
+  Color get _text => _dark ? const Color(0xFFFFFFFF) : const Color(0xFF111318);
 
-  Color get _muted => _dark ? const Color(0xFF8D939C) : const Color(0xFF69707A);
+  Color get _muted => _dark ? const Color(0xFF9297A0) : const Color(0xFF737B86);
 
   Color get _divider =>
-      _dark ? const Color(0xFF202328) : const Color(0xFFE7E9ED);
+      _dark ? const Color(0xFF282B31) : const Color(0xFFE6E8EC);
 
-  static const Color _blue = Color(0xFF1D9BF0);
+  static const Color _accent = Color(0xFFF91880);
 
   // ============================================================
   // BUILD
@@ -60,6 +63,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            // Settings menu
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -81,21 +85,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _showComingSoon("Help and support");
                     },
                   ),
-
-                  _buildMenuRow(
-                    icon: CupertinoIcons.brightness,
-                    title: "Dark mode",
-                    onTap: () {
-                      _showComingSoon("Dark mode toggle");
-                    },
-                  ),
                 ],
               ),
             ),
 
-            // ====================================================
+            // Dark Mode section
+            Container(
+              color: _surface,
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    secondary: Icon(
+                      _dark
+                          ? CupertinoIcons.moon_fill
+                          : CupertinoIcons.sun_max_fill,
+                      color: _accent,
+                      size: 22,
+                    ),
+                    title: Text(
+                      'Dark mode',
+                      style: TextStyle(
+                        color: _text,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    value: _dark,
+                    onChanged: (enabled) async {
+                      final selectedTheme = enabled
+                          ? ThemeMode.dark
+                          : ThemeMode.light;
+
+                      themeNotifier.value = selectedTheme;
+
+                      final prefs = await SharedPreferences.getInstance();
+
+                      await prefs.setString(
+                        'microblog_theme',
+                        enabled ? 'dark' : 'light',
+                      );
+                    },
+                  ),
+                  Divider(color: _divider, height: 1),
+                ],
+              ),
+            ),
+
             // LOG OUT
-            // ====================================================
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
               child: OutlinedButton(
@@ -161,11 +197,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Column(
         children: [
           ListTile(
-            leading: Icon(
-              icon,
-              color: _dark ? _blue : const Color(0xFF69707A),
-              size: 22,
-            ),
+            leading: Icon(icon, color: _accent, size: 22),
             title: Text(
               title,
               style: TextStyle(
@@ -290,7 +322,7 @@ class _SettingsAndPrivacySubmenu extends StatelessWidget {
     final bool dark = Theme.of(context).brightness == Brightness.dark;
 
     final Color background = dark
-        ? const Color(0xFF050505)
+        ? const Color(0xFF08090B)
         : const Color(0xFFF7F8FA);
 
     final Color surface = dark ? const Color(0xFF090A0C) : Colors.white;
