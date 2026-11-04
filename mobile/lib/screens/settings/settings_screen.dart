@@ -103,7 +103,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       size: 22,
                     ),
                     title: Text(
-                      'Dark mode',
+                      _dark ? 'Dark mode' : 'Light mode',
                       style: TextStyle(
                         color: _text,
                         fontSize: 16,
@@ -138,21 +138,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onPressed: _executeLogout,
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 50),
-                  side: BorderSide(
-                    color: _dark
-                        ? Colors.redAccent.withValues(alpha: 0.5)
-                        : Colors.redAccent,
-                  ),
+                  foregroundColor: _text,
+                  side: BorderSide(color: _divider, width: 1.2),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-                child: const Text(
+                child: Text(
                   "Log out",
                   style: TextStyle(
-                    color: Colors.redAccent,
+                    color: _text,
                     fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -294,12 +291,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   );
                 }
               },
-              child: const Text(
+              child: Text(
                 "Log Out",
-                style: TextStyle(
-                  color: Colors.redAccent,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: TextStyle(color: _text, fontWeight: FontWeight.w700),
               ),
             ),
           ],
@@ -399,7 +393,7 @@ class _SettingsAndPrivacySubmenu extends StatelessWidget {
       child: Column(
         children: [
           ListTile(
-            leading: const Icon(CupertinoIcons.chevron_right),
+            leading: Icon(icon, color: const Color(0xFFF91880), size: 22),
             title: Text(
               title,
               style: TextStyle(
@@ -519,7 +513,7 @@ class _SettingsDeepSubmenu extends StatelessWidget {
       child: Column(
         children: [
           ListTile(
-            leading: Icon(icon, color: const Color(0xFF1D9BF0), size: 22),
+            leading: Icon(icon, color: const Color(0xFFF91880), size: 22),
             title: Text(
               title,
               style: TextStyle(
@@ -629,7 +623,7 @@ class _ManageAccountsSubmenu extends StatelessWidget {
       child: Column(
         children: [
           ListTile(
-            leading: Icon(icon, color: const Color(0xFF1D9BF0), size: 22),
+            leading: Icon(icon, color: const Color(0xFFF91880), size: 22),
             title: Text(
               title,
               style: TextStyle(
@@ -732,7 +726,7 @@ class _PasswordAndSecuritySubmenu extends StatelessWidget {
       child: Column(
         children: [
           ListTile(
-            leading: Icon(icon, color: const Color(0xFF1D9BF0), size: 22),
+            leading: Icon(icon, color: const Color(0xFFF91880), size: 22),
             title: Text(
               title,
               style: TextStyle(
@@ -1042,7 +1036,7 @@ class _AddAccountScreenState extends State<_AddAccountScreen> {
                       );
                   },
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF1D9BF0),
+                    backgroundColor: const Color(0xFFF91880),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),

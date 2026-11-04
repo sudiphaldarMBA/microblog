@@ -109,17 +109,32 @@ exports.createPost = async (
       content = '',
       image = '',
       video = '',
+      images = [],
+      videos = [],
       location = '',
       poll = null,
     } = req.body || {};
 
+    // Up to 10 photos and 5 videos per post.
+    const cleanImages = (Array.isArray(images) ? images : [])
+      .map(cleanString)
+      .filter(Boolean)
+      .slice(0, 10);
+
+    const cleanVideos = (Array.isArray(videos) ? videos : [])
+      .map(cleanString)
+      .filter(Boolean)
+      .slice(0, 5);
+
     const cleanContent =
       cleanString(content);
 
+    // First item is also kept in image/video for older screens.
     const cleanImage =
-      cleanString(image);
+      cleanString(image) || cleanImages[0] || '';
 
-    const cleanVideo = cleanString(video);
+    const cleanVideo =
+      cleanString(video) || cleanVideos[0] || '';
 
     const cleanLocation =
       cleanString(location);
@@ -183,8 +198,12 @@ exports.createPost = async (
           cleanContent,
         image:
           cleanImage,
-          video: 
+        video:
           cleanVideo,
+        images:
+          cleanImages,
+        videos:
+          cleanVideos,
         location:
           cleanLocation,
         poll:

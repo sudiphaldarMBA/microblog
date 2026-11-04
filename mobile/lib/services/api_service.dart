@@ -386,10 +386,21 @@ class ApiService {
     required String content,
     String? image,
     String? video,
+    List<String>? images,
+    List<String>? videos,
     String? location,
     Map<String, dynamic>? poll,
   }) async {
     final body = <String, dynamic>{'content': content.trim()};
+
+    // Multiple media: up to 10 photos and 5 videos per post.
+    if (images != null && images.isNotEmpty) {
+      body['images'] = images;
+    }
+
+    if (videos != null && videos.isNotEmpty) {
+      body['videos'] = videos;
+    }
 
     if (image != null && image.trim().isNotEmpty) {
       body['image'] = image;
@@ -470,6 +481,30 @@ class ApiService {
 
     final response = await http.post(
       Uri.parse('$baseUrl/users/$userId/follow'),
+      headers: await _headers(),
+    );
+
+    await _handleUnauthorized(response);
+
+    return _decode(response);
+  }
+
+  // ============================================================
+  // FOLLOWERS / FOLLOWING LISTS
+  // ============================================================
+
+  static Future<Map<String, dynamic>> getConnections({
+    required String userId,
+    required bool followers,
+  }) async {
+    if (userId.trim().isEmpty) {
+      return {'success': false, 'message': 'User ID is required'};
+    }
+
+    final response = await http.get(
+      Uri.parse(
+        '$baseUrl/users/$userId/${followers ? 'followers' : 'following'}',
+      ),
       headers: await _headers(),
     );
 

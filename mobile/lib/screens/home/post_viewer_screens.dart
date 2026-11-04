@@ -17,17 +17,25 @@ const Color _kAccent = Color(0xFFF91880);
 typedef PostStateReader = Map<String, dynamic> Function(String postId);
 
 String _fmt(int value) {
+  if (value < 1000) {
+    return value < 0 ? '0' : '$value';
+  }
+
+  if (value > 10000000) {
+    return '10M+';
+  }
+
+  if (value >= 10000000) {
+    return '10M';
+  }
+
   if (value >= 1000000) {
     final v = value / 1000000;
-    return '${v.toStringAsFixed(v >= 10 ? 0 : 1)}M';
+    return '${v.toStringAsFixed(v == v.roundToDouble() ? 0 : 1)}M';
   }
 
-  if (value >= 1000) {
-    final v = value / 1000;
-    return '${v.toStringAsFixed(v >= 10 ? 0 : 1)}K';
-  }
-
-  return '$value';
+  final v = value / 1000;
+  return '${v.toStringAsFixed(v >= 100 || v == v.roundToDouble() ? 0 : 1)}K';
 }
 
 int _int(dynamic value) => value is num ? value.toInt() : 0;
@@ -305,38 +313,34 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
   }
 
-  Widget _stat(int count, String label) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 18),
-      child: RichText(
-        text: TextSpan(
+  Widget _action(
+    IconData icon,
+    Color color,
+    VoidCallback onTap, {
+    int count = 0,
+    bool showCount = true,
+  }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SizedBox(
+        height: 48,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            TextSpan(
-              text: _fmt(count),
-              style: TextStyle(
-                color: _text,
-                fontWeight: FontWeight.w800,
-                fontSize: 14.5,
+            _boldIcon(icon, 21, color),
+            if (showCount && count > 0) ...[
+              const SizedBox(width: 5),
+              Text(
+                _fmt(count),
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-            TextSpan(
-              text: ' $label',
-              style: TextStyle(color: _muted, fontSize: 14.5),
-            ),
+            ],
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _action(IconData icon, Color color, VoidCallback onTap) {
-    return Expanded(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: SizedBox(
-          height: 48,
-          child: Center(child: _boldIcon(icon, 25, color)),
         ),
       ),
     );
@@ -455,7 +459,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             const SizedBox(height: 16),
             Text(
               widget.content,
-              style: TextStyle(color: _text, fontSize: 20, height: 1.4),
+              style: TextStyle(color: _text, fontSize: 16, height: 1.4),
             ),
           ],
 
@@ -507,49 +511,40 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           Divider(height: 28, color: _divider),
 
           // ------------------------------------------------------
-          // COUNTS
-          // ------------------------------------------------------
-          Wrap(
-            runSpacing: 6,
-            children: [
-              _stat(reposts, 'Reposts'),
-              _stat(likes, 'Likes'),
-              _stat(comments, 'Comments'),
-              _stat(shares, 'Shares'),
-            ],
-          ),
-
-          Divider(height: 28, color: _divider),
-
-          // ------------------------------------------------------
           // ACTIONS
           // ------------------------------------------------------
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _action(
                 liked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
                 liked ? _kAccent : _muted,
                 () => _run(widget.onLike),
+                count: likes,
               ),
               _action(
                 CupertinoIcons.bubble_left,
                 _muted,
                 () => _run(widget.onComment),
+                count: comments,
               ),
               _action(
                 CupertinoIcons.arrow_2_squarepath,
                 _muted,
                 () => _run(widget.onRepost),
+                count: reposts,
               ),
               _action(
                 CupertinoIcons.arrowshape_turn_up_right,
                 _muted,
                 () => _run(widget.onShare),
+                count: shares,
               ),
               _action(
                 saved ? CupertinoIcons.bookmark_fill : CupertinoIcons.bookmark,
                 saved ? _kAccent : _muted,
                 () => _run(widget.onBookmark),
+                showCount: false,
               ),
             ],
           ),
@@ -630,7 +625,7 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _boldIcon(icon, 30, color),
+            _boldIcon(icon, 26, color),
             const SizedBox(height: 4),
             Text(
               label,

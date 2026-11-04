@@ -52,7 +52,7 @@ class AppTheme {
   // ============================================================
 
   static ThemeData lightTheme = ThemeData(
-    fontFamily: GoogleFonts.inter().fontFamily,
+    fontFamily: GoogleFonts.roboto().fontFamily,
     useMaterial3: true,
     brightness: Brightness.light,
     scaffoldBackgroundColor: lightBackground,
@@ -66,7 +66,7 @@ class AppTheme {
       onSurface: lightPrimaryText,
       error: Color(0xFFDC2626),
       onError: Colors.white,
-      ),
+    ),
 
     appBarTheme: const AppBarTheme(
       centerTitle: false,
@@ -110,12 +110,12 @@ class AppTheme {
         borderSide: BorderSide.none,
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(inputRadius),
-        borderSide: const BorderSide(
-          color: lightPrimaryText,
-          width: 1.3,
-        ),
-      ),
+  borderRadius: BorderRadius.circular(inputRadius),
+  borderSide: const BorderSide(
+    color: roseAccent,
+    width: 1.3,
+  ),
+),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(inputRadius),
         borderSide: const BorderSide(
@@ -212,7 +212,7 @@ class AppTheme {
   // ============================================================
 
   static ThemeData darkTheme = ThemeData(
-    fontFamily: GoogleFonts.inter().fontFamily,
+    fontFamily: GoogleFonts.roboto().fontFamily,
     useMaterial3: true,
     brightness: Brightness.dark,
     scaffoldBackgroundColor: darkBackground,
@@ -270,12 +270,12 @@ class AppTheme {
         borderSide: BorderSide.none,
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(inputRadius),
-        borderSide: const BorderSide(
-          color: darkPrimaryText,
-          width: 1.3,
-        ),
-      ),
+  borderRadius: BorderRadius.circular(inputRadius),
+  borderSide: const BorderSide(
+    color: roseAccent,
+    width: 1.3,
+  ),
+),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(inputRadius),
         borderSide: const BorderSide(

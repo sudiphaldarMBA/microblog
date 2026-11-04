@@ -159,3 +159,68 @@ exports.toggleFollow = async (req, res) => {
     });
   }
 };
+
+// ==========================================================
+// FOLLOWERS / FOLLOWING LIST
+// GET /api/users/:userId/followers
+// GET /api/users/:userId/following
+// ==========================================================
+
+function buildConnectionsHandler(field) {
+  return async (req, res) => {
+    try {
+      const { userId } = req.params;
+
+      if (!isValidObjectId(userId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid user ID",
+        });
+      }
+
+      const user = await User.findById(userId)
+        .select(field)
+        .populate({
+          path: field,
+          select: "displayName username avatar bio",
+        })
+        .lean();
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      const me = await User.findById(req.userId).select("following").lean();
+
+      const myFollowing = new Set(
+        ((me && me.following) || []).map((id) => String(id))
+      );
+
+      const users = (user[field] || [])
+        .filter(Boolean)
+        .map((item) => ({
+          ...item,
+          isFollowing: myFollowing.has(String(item._id)),
+        }));
+
+      return res.status(200).json({
+        success: true,
+        message: "Users retrieved successfully",
+        data: { users },
+      });
+    } catch (error) {
+      console.error("Get Connections Error:", error);
+
+      return res.status(500).json({
+        success: false,
+        message: "Server error while retrieving users",
+      });
+    }
+  };
+}
+
+exports.getFollowers = buildConnectionsHandler("followers");
+exports.getFollowing = buildConnectionsHandler("following");

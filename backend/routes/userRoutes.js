@@ -25,6 +25,10 @@ const router = express.Router();
 
 router.get("/:userId", auth, userController.getUserProfile);
 
+router.get("/:userId/followers", auth, userController.getFollowers);
+
+router.get("/:userId/following", auth, userController.getFollowing);
+
 router.post("/:userId/follow", auth, userController.toggleFollow);
 
 module.exports = router;

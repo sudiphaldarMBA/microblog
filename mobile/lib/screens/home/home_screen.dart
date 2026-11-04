@@ -1181,6 +1181,21 @@ Color get _composer =>
 
     final String videoMedia = rawVideoMedia?.toString().trim() ?? '';
 
+    // Multiple media (max 10 photos / 5 videos per post).
+    final dynamic mediaSource = isPlainRepost ? repostOf : post;
+
+    final List<String> imageList = _mediaItems(
+      mediaSource['images'],
+      media,
+      10,
+    );
+
+    final List<String> videoList = _mediaItems(
+      mediaSource['videos'],
+      videoMedia,
+      5,
+    );
+
     final location = post['location']?.toString().trim() ?? '';
 
     final poll = post['poll'] is Map
@@ -1510,14 +1525,22 @@ Color get _composer =>
                         // ------------------------------------------------
                         // IMAGE MEDIA
                         // ------------------------------------------------
-                        if (media.isNotEmpty)
+                        if (imageList.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 10),
                             child: GestureDetector(
                               onTap: openDetail,
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(16),
-                                child: _media(media),
+                                child: imageList.length > 1
+                                    ? _MediaPager(
+                                        height: 380,
+                                        children: [
+                                          for (final item in imageList)
+                                            _media(item),
+                                        ],
+                                      )
+                                    : _media(imageList.first),
                               ),
                             ),
                           ),
@@ -1525,22 +1548,70 @@ Color get _composer =>
                         // ------------------------------------------------
                         // VIDEO MEDIA
                         // ------------------------------------------------
-                        if (videoMedia.isNotEmpty)
+                        if (videoList.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 10),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(16),
-                              child: Stack(
-                                children: [
-                                  HomeVideoPlayer(videoData: videoMedia),
-                                  // Tap the video -> full screen video feed.
-                                  Positioned.fill(
-                                    child: GestureDetector(
-                                      behavior: HitTestBehavior.opaque,
-                                      onTap: () => _openVideoFeed(id),
-                                    ),
-                                  ),
-                                ],
+                              child: Container(
+                                color: Colors.black,
+                                child: videoList.length > 1
+                                    ? _MediaPager(
+                                        height:
+                                            MediaQuery.of(context).size.height *
+                                            .6,
+                                        children: [
+                                          for (final item in videoList)
+                                            Stack(
+                                              children: [
+                                                ClipRect(
+ child: OverflowBox(
+ minHeight: 0,
+ maxHeight: double.infinity,
+ alignment: Alignment.center,
+ child: HomeVideoPlayer(videoData: item),
+ ),
+ ),
+                                                Positioned.fill(
+                                                  child: GestureDetector(
+                                                    behavior:
+                                                        HitTestBehavior.opaque,
+                                                    onTap: () =>
+                                                        _openVideoFeed(id),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                        ],
+                                      )
+                                    : ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          maxHeight:
+                                              MediaQuery.of(
+                                                context,
+                                              ).size.height *
+                                              .6,
+                                        ),
+                                        child: Stack(
+                                          children: [
+                                            ClipRect(
+ child: OverflowBox(
+ minHeight: 0,
+ maxHeight: double.infinity,
+ alignment: Alignment.center,
+ child: HomeVideoPlayer(videoData: videoList.first),
+ ),
+ ),
+                                            Positioned.fill(
+                                              child: GestureDetector(
+                                                behavior:
+                                                    HitTestBehavior.opaque,
+                                                onTap: () => _openVideoFeed(id),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                               ),
                             ),
                           ),
@@ -1555,18 +1626,22 @@ Color get _composer =>
                         // ------------------------------------------------------
                         // VIEW COUNT
                         // ------------------------------------------------------
-                        Row(
-                          children: [
-                            Icon(CupertinoIcons.eye, size: 16, color: _muted),
-                            const SizedBox(width: 5),
-                            Text(
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: Text(
                               '${_formatCount(views)} views',
-                              style: TextStyle(color: _muted, fontSize: 12),
+                              style: TextStyle(
+                                color: _muted,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
-                          ],
+                          ),
                         ),
 
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 2),
 
                         // ------------------------------------------------
                         // ACTION BAR
@@ -1650,6 +1725,26 @@ Color get _composer =>
   // ACTION BUTTON (MODERN X / INSTAGRAM FLOATING STYLE)
   // ============================================================
 
+  List<String> _mediaItems(dynamic raw, String single, int max) {
+    final items = <String>[];
+
+    if (raw is List) {
+      for (final item in raw) {
+        final value = item?.toString().trim() ?? '';
+
+        if (value.isNotEmpty) {
+          items.add(value);
+        }
+      }
+    }
+
+    if (items.isEmpty && single.isNotEmpty) {
+      items.add(single);
+    }
+
+    return items.length > max ? items.sublist(0, max) : items;
+  }
+
   Widget _actionButton({
     IconData? icon,
     Widget? iconWidget,
@@ -1695,7 +1790,7 @@ Color get _composer =>
                   : Icon(
                       icon,
                       key: ValueKey(icon),
-                      size: 23,
+                      size: 21,
                       color: color,
                       // Cupertino outline glyphs are thin; two hairline
                       // shadows make them a touch bolder.
@@ -1899,7 +1994,7 @@ Widget _bottomNavigation() {
     child: Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
       child: Container(
-        height: 70,
+        height: 60,
         decoration: BoxDecoration(
           color: _surface,
           borderRadius: BorderRadius.circular(26),
@@ -1916,18 +2011,19 @@ Widget _bottomNavigation() {
           children: [
             _bottomNavItem(
               icon: Icons.home_outlined,
-              activeIcon: Icons.home_outlined,
+              activeIcon: Icons.home_rounded,
               index: 0,
               label: 'Home',
             ),
             _bottomNavItem(
-              icon: Icons.movie_creation_outlined,
-              activeIcon: Icons.movie_creation_outlined,
+              icon: Icons.smart_display_outlined,
+              activeIcon: Icons.smart_display_rounded,
               index: 1,
               label: 'Shorts',
             ),
             _buildCreateNavButton(),
             _bottomNavItem(
+              iconSize: 20,
               icon: CupertinoIcons.bookmark,
               activeIcon: CupertinoIcons.bookmark_fill,
               index: 3,
@@ -1935,7 +2031,7 @@ Widget _bottomNavigation() {
             ),
             _bottomNavItem(
               icon: Icons.settings_outlined,
-              activeIcon: Icons.settings_outlined,
+              activeIcon: Icons.settings_rounded,
               index: 4,
               label: 'Settings',
             ),
@@ -1947,6 +2043,7 @@ Widget _bottomNavigation() {
 }
 
 Widget _bottomNavItem({
+  double iconSize = 24,
   required IconData icon,
   required IconData activeIcon,
   required int index,
@@ -1964,7 +2061,7 @@ Widget _bottomNavItem({
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeInOut,
-          margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 7),
+          margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
           decoration: BoxDecoration(
             color: active ? _composer : Colors.transparent,
             borderRadius: BorderRadius.circular(18),
@@ -1978,19 +2075,30 @@ Widget _bottomNavItem({
                 child: Center(
                   child: Icon(
                     active ? activeIcon : icon,
-                    size: 24,
+                    size: iconSize,
                     color: active ? _text : _muted,
+                    // Slightly bolder strokes.
+                    shadows: [
+                      Shadow(
+                        color: active ? _text : _muted,
+                        offset: const Offset(.5, 0),
+                      ),
+                      Shadow(
+                        color: active ? _text : _muted,
+                        offset: const Offset(-.5, 0),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               Text(
                 label,
                 maxLines: 1,
                 style: TextStyle(
                   color: active ? _text : _muted,
                   fontSize: 10.5,
-                  fontWeight: active ? FontWeight.w800 : FontWeight.w500,
+                  fontWeight: active ? FontWeight.w800 : FontWeight.w700,
                 ),
               ),
             ],
@@ -2015,7 +2123,7 @@ Widget _buildCreateNavButton() {
             height: 54,
             decoration: BoxDecoration(
               color: _dark ? Colors.white : const Color(0xFF111318),
-              borderRadius: BorderRadius.circular(17),
+              shape: BoxShape.circle,
             ),
             child: Icon(
               CupertinoIcons.plus,
@@ -2518,7 +2626,15 @@ Widget _buildCreateNavButton() {
 
   String _formatCount(int value) {
     if (value < 1000) {
-      return value.toString();
+      return value < 0 ? '0' : value.toString();
+    }
+
+    if (value > 10000000) {
+      return '10M+';
+    }
+
+    if (value >= 10000000) {
+      return '10M';
     }
 
     if (value < 1000000) {
@@ -2529,19 +2645,15 @@ Widget _buildCreateNavButton() {
       }
 
       if (number >= 10) {
-        return '${number.toStringAsFixed(1)}K';
+        return '${number.toStringAsFixed(number == number.roundToDouble() ? 0 : 1)}K';
       }
 
-      return '${number.toStringAsFixed(1)}K';
+      return '${number.toStringAsFixed(number == number.roundToDouble() ? 0 : 1)}K';
     }
 
     final number = value / 1000000;
 
-    if (number >= 100) {
-      return '${number.toStringAsFixed(0)}M';
-    }
-
-    return '${number.toStringAsFixed(1)}M';
+    return '${number.toStringAsFixed(number == number.roundToDouble() ? 0 : 1)}M';
   }
 
   // ============================================================
@@ -2593,11 +2705,25 @@ Widget _buildCreateNavButton() {
       // ========================================================
       // APP BAR
       // ========================================================
-      appBar: AppBar(
+      // ========================================================
+      // FEED
+      // ========================================================
+      body: RefreshIndicator(
+        color: _accent,
+        onRefresh: _refresh,
+        child: CustomScrollView(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverAppBar(
         backgroundColor: _surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
+        floating: true,
+        snap: true,
+        pinned: false,
+        toolbarHeight: 48,
         centerTitle: true,
 
         // Hairline under the app bar, matching the line above the
@@ -2641,26 +2767,15 @@ Widget _buildCreateNavButton() {
                 context,
               ).push(MaterialPageRoute(builder: (_) => const SearchScreen()));
             },
-            icon: Icon(CupertinoIcons.search, color: _text, size: 25),
+            icon: _boldIcon(CupertinoIcons.search, 25, _text),
           ),
           IconButton(
             tooltip: 'Notifications',
             onPressed: _openNotifications,
-            icon: Icon(CupertinoIcons.bell, color: _text, size: 25),
+            icon: _boldIcon(CupertinoIcons.bell, 25, _text),
           ),
         ],
       ),
-
-      // ========================================================
-      // FEED
-      // ========================================================
-      body: RefreshIndicator(
-        color: _accent,
-        onRefresh: _refresh,
-        child: CustomScrollView(
-          controller: _scrollController,
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
             if (_loadingPosts)
               const SliverFillRemaining(
                 hasScrollBody: false,
@@ -2717,6 +2832,87 @@ Widget _buildCreateNavButton() {
       // ========================================================
       bottomNavigationBar: _showBottomNavigation ? _bottomNavigation() : null,
     );
+  }
+}
+
+Widget _boldIcon(IconData icon, double size, Color color) {
+  return Icon(
+    icon,
+    size: size,
+    color: color,
+    shadows: [
+      Shadow(color: color, offset: const Offset(.45, 0)),
+      Shadow(color: color, offset: const Offset(-.45, 0)),
+    ],
+  );
+}
+
+// ==================================================================
+// MEDIA PAGER (shows 1/N, 2/N ... badge when more than one item)
+// ==================================================================
+
+class _MediaPager extends StatefulWidget {
+  final double height;
+  final List<Widget> children;
+
+  const _MediaPager({required this.height, required this.children});
+
+  @override
+  State<_MediaPager> createState() => _MediaPagerState();
+}
+
+class _MediaPagerState extends State<_MediaPager> {
+  int _page = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = widget.children.length;
+
+    return SizedBox(
+      height: widget.height,
+      child: Stack(
+        children: [
+          PageView(
+            onPageChanged: (value) => setState(() => _page = value),
+            children: [
+              for (final child in widget.children)
+                SizedBox.expand(child: FittedBoxIfNeeded(child: child)),
+            ],
+          ),
+          if (total > 1)
+            Positioned(
+              top: 10,
+              right: 10,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(.6),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${_page + 1}/$total',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class FittedBoxIfNeeded extends StatelessWidget {
+  final Widget child;
+
+  const FittedBoxIfNeeded({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(child: child);
   }
 }
 

@@ -96,6 +96,13 @@ router.delete(
   postController.deleteComment
 );
 
+// DELETE POST / REPOST
+router.delete(
+  '/:postId',
+  authMiddleware,
+  postController.deletePost
+);
+
 router.post(
   '/:postId/bookmark',
   authMiddleware,
