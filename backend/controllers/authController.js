@@ -2,6 +2,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
 const User = require("../models/User");
+const { auth: firebaseAuth } = require("../config/firebaseAdmin");
 
 // ==========================================================
 // HELPER: BUILD USER RESPONSE
@@ -32,7 +33,7 @@ function buildUserResponse(user) {
 
     username: user.username,
 
-    email: user.email,
+    email: user.email || "",
 
     bio: user.bio || "",
 
@@ -312,10 +313,9 @@ exports.login = async (req, res) => {
     // FIND USER
     // --------------------------------------------------------
 
-    const user =
-      await User.findOne({
-        email: normalizedEmail,
-      });
+    const user = await User.findOne({
+         email: normalizedEmail,
+    }).select("+password");
 
     if (!user) {
       return res.status(401).json({
@@ -403,6 +403,322 @@ exports.login = async (req, res) => {
       success: false,
       message:
         "Server error during login",
+    });
+  }
+};
+
+// ==========================================================
+// FIREBASE LOGIN (GOOGLE + PHONE OTP)
+// ==========================================================
+
+exports.firebaseLogin = async (req, res) => {
+  try {
+    const {
+      idToken,
+      displayName,
+      username,
+    } = req.body;
+
+    // --------------------------------------------------------
+    // VALIDATE FIREBASE TOKEN
+    // --------------------------------------------------------
+
+    if (!idToken || typeof idToken !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "Firebase ID token is required",
+      });
+    }
+
+    if (!process.env.JWT_SECRET) {
+      console.error("JWT_SECRET is missing from .env");
+
+      return res.status(500).json({
+        success: false,
+        message: "Server authentication configuration error",
+      });
+    }
+
+    // Verify the token with Firebase Admin.
+    const decodedToken = await firebaseAuth.verifyIdToken(idToken);
+
+    const firebaseUid = decodedToken.uid;
+
+    const signInProvider =
+      decodedToken.firebase?.sign_in_provider;
+
+    // Accept only Google and phone authentication.
+    let provider;
+
+    if (signInProvider === "google.com") {
+      provider = "google";
+    } else if (signInProvider === "phone") {
+      provider = "phone";
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "Unsupported authentication provider",
+      });
+    }
+
+    // Google accounts must have a verified email.
+    const verifiedEmail =
+      provider === "google" &&
+      decodedToken.email_verified === true
+        ? decodedToken.email?.trim().toLowerCase()
+        : undefined;
+
+    if (provider === "google" && !verifiedEmail) {
+      return res.status(403).json({
+        success: false,
+        message: "Please verify your Google email address",
+      });
+    }
+
+    // Firebase verifies the phone number during phone sign-in.
+    const verifiedPhone =
+      provider === "phone"
+        ? decodedToken.phone_number
+        : undefined;
+
+    if (provider === "phone" && !verifiedPhone) {
+      return res.status(403).json({
+        success: false,
+        message: "Verified phone number is missing",
+      });
+    }
+
+    // --------------------------------------------------------
+    // FIND EXISTING FIREBASE ACCOUNT
+    // --------------------------------------------------------
+
+    let user = await User.findOne({
+      firebaseUid: firebaseUid,
+    });
+
+    // --------------------------------------------------------
+    // EXISTING FIREBASE USER
+    // --------------------------------------------------------
+
+    if (user) {
+      // Record the provider used by this Firebase identity.
+      if (!Array.isArray(user.authProviders)) {
+        user.authProviders = [];
+      }
+
+      if (!user.authProviders.includes(provider)) {
+        user.authProviders.push(provider);
+        await user.save();
+      }
+
+      const token = jwt.sign(
+        {
+          userId: user._id.toString(),
+          ...(user.email ? { email: user.email } : {}),
+        },
+        process.env.JWT_SECRET,
+        {
+          expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+        }
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Login successful",
+        data: {
+          token,
+          user: buildUserResponse(user),
+        },
+      });
+    }
+
+    // --------------------------------------------------------
+    // PREVENT AUTOMATIC ACCOUNT LINKING
+    // --------------------------------------------------------
+
+    if (verifiedEmail) {
+      const existingEmail = await User.findOne({
+        email: verifiedEmail,
+      });
+
+      if (existingEmail) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "An account with this email already exists. Please sign in using your existing login method.",
+          code: "ACCOUNT_ALREADY_EXISTS",
+        });
+      }
+    }
+
+    if (verifiedPhone) {
+      const existingPhone = await User.findOne({
+        phoneNumber: verifiedPhone,
+      });
+
+      if (existingPhone) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "This phone number is already associated with another account.",
+          code: "PHONE_ALREADY_REGISTERED",
+        });
+      }
+    }
+
+    // --------------------------------------------------------
+    // NEW USER: PROFILE SETUP REQUIRED
+    // --------------------------------------------------------
+
+    const trimmedDisplayName =
+      typeof displayName === "string"
+        ? displayName.trim()
+        : "";
+
+    const normalizedUsername =
+      typeof username === "string"
+        ? username.trim()
+        : "";
+
+    // Return profile information so Flutter can open
+    // the username and display-name setup screen.
+    if (!trimmedDisplayName || !normalizedUsername) {
+      return res.status(200).json({
+        success: true,
+        needsProfileSetup: true,
+        message: "Please complete your MicroBlog profile",
+        data: {
+          displayName:
+            decodedToken.name || "",
+          email: verifiedEmail || "",
+          phoneNumber: verifiedPhone || "",
+          avatar: decodedToken.picture || "",
+          provider,
+        },
+      });
+    }
+
+    // --------------------------------------------------------
+    // VALIDATE DISPLAY NAME
+    // --------------------------------------------------------
+
+    if (
+      trimmedDisplayName.length < 3 ||
+      trimmedDisplayName.length > 50
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Display name must be between 3 and 50 characters",
+      });
+    }
+
+    // --------------------------------------------------------
+    // VALIDATE USERNAME
+    // --------------------------------------------------------
+
+    if (
+      normalizedUsername.length < 3 ||
+      normalizedUsername.length > 30
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Username must be between 3 and 30 characters",
+      });
+    }
+
+    const existingUsername = await User.findOne({
+      username: usernameMatcher(normalizedUsername),
+    });
+
+    if (existingUsername) {
+      return res.status(409).json({
+        success: false,
+        message: "Username is already taken",
+        code: "USERNAME_ALREADY_TAKEN",
+      });
+    }
+
+    // --------------------------------------------------------
+    // CREATE FIREBASE USER
+    // --------------------------------------------------------
+
+    user = await User.create({
+      displayName: trimmedDisplayName,
+      username: normalizedUsername,
+
+      ...(verifiedEmail ? { email: verifiedEmail } : {}),
+
+      firebaseUid: firebaseUid,
+
+      ...(verifiedPhone
+        ? { phoneNumber: verifiedPhone }
+        : {}),
+
+      authProviders: [provider],
+
+      avatar: decodedToken.picture || "",
+    });
+
+    // --------------------------------------------------------
+    // CREATE MICROBLOG JWT
+    // --------------------------------------------------------
+
+    const token = jwt.sign(
+      {
+        userId: user._id.toString(),
+        ...(user.email ? { email: user.email } : {}),
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+      }
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: "Account created successfully",
+      data: {
+        token,
+        user: buildUserResponse(user),
+      },
+    });
+
+  } catch (error) {
+    console.error("Firebase Login Error:", error);
+
+    if (
+      error.code === "auth/argument-error" ||
+      error.code === "auth/id-token-expired" ||
+      error.code === "auth/invalid-id-token"
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired Firebase token",
+      });
+    }
+
+    if (error.code === 11000) {
+      const duplicateField =
+        Object.keys(error.keyPattern || {})[0];
+
+      const messages = {
+        email: "Email is already registered",
+        username: "Username is already taken",
+        firebaseUid: "This Firebase account is already registered",
+        phoneNumber: "Phone number is already registered",
+      };
+
+      return res.status(409).json({
+        success: false,
+        message:
+          messages[duplicateField] ||
+          "An account with these details already exists",
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error during Firebase authentication",
     });
   }
 };

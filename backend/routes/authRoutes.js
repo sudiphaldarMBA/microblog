@@ -1,10 +1,11 @@
+
 const express = require("express");
 
 const router = express.Router();
 
 const authController = require("../controllers/authController");
 const authMiddleware = require("../middleware/authMiddleware");
-const followController = require('../controllers/followController');
+const followController = require("../controllers/followController");
 
 // ==========================================
 // REGISTER
@@ -15,11 +16,19 @@ router.post(
 );
 
 // ==========================================
-// LOGIN
+// EMAIL / PASSWORD LOGIN
 // ==========================================
 router.post(
   "/login",
   authController.login
+);
+
+// ==========================================
+// FIREBASE LOGIN (GOOGLE / PHONE OTP)
+// ==========================================
+router.post(
+  "/firebase-login",
+  authController.firebaseLogin
 );
 
 // ==========================================
@@ -39,40 +48,45 @@ router.put(
   authMiddleware,
   authController.updateProfile
 );
-// Public profile and follow system
+
+// ==========================================
+// PUBLIC PROFILE AND FOLLOW SYSTEM
+// ==========================================
 router.get(
-  '/users/:userId',
+  "/users/:userId",
   authMiddleware,
   followController.getProfile
 );
 
 router.post(
-  '/users/:userId/follow',
+  "/users/:userId/follow",
   authMiddleware,
   followController.follow
 );
 
 router.delete(
-  '/users/:userId/follow',
+  "/users/:userId/follow",
   authMiddleware,
   followController.unfollow
 );
 
-// Incoming follow requests
+// ==========================================
+// INCOMING FOLLOW REQUESTS
+// ==========================================
 router.get(
-  '/follow-requests',
+  "/follow-requests",
   authMiddleware,
   followController.getFollowRequests
 );
 
 router.post(
-  '/follow-requests/:requesterId/accept',
+  "/follow-requests/:requesterId/accept",
   authMiddleware,
   followController.acceptFollowRequest
 );
 
 router.delete(
-  '/follow-requests/:requesterId',
+  "/follow-requests/:requesterId",
   authMiddleware,
   followController.rejectFollowRequest
 );

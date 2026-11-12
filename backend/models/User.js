@@ -1,3 +1,4 @@
+
 const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema(
@@ -24,31 +25,69 @@ const userSchema = new mongoose.Schema(
       trim: true,
       minlength: 3,
       maxlength: 30,
-      // Stored exactly as typed (e.g. "M_Haldar"). Uniqueness is
-      // checked case-insensitively in authController.
       unique: true,
     },
 
     // ==========================================
     // EMAIL
+    // Required for password accounts.
+    // Optional for Firebase phone accounts.
     // ==========================================
 
     email: {
       type: String,
-      required: true,
-      unique: true,
+      required: function () {
+        return !this.firebaseUid;
+      },
       trim: true,
       lowercase: true,
+      set: (value) => {
+        if (value == null || value.trim() === "") {
+          return undefined;
+        }
+
+        return value.trim().toLowerCase();
+      },
     },
 
     // ==========================================
     // PASSWORD
+    // Required for traditional accounts only.
     // ==========================================
 
     password: {
       type: String,
-      required: true,
+      required: function () {
+        return !this.firebaseUid;
+      },
       minlength: 8,
+      select: false,
+    },
+
+    // ==========================================
+    // FIREBASE AUTHENTICATION
+    // ==========================================
+
+    firebaseUid: {
+      type: String,
+      trim: true,
+      default: undefined,
+    },
+
+    phoneNumber: {
+      type: String,
+      trim: true,
+      default: undefined,
+    },
+
+    authProviders: {
+      type: [
+        {
+          type: String,
+          enum: ["password", "google", "phone"],
+        },
+      ],
+      default: ["password"],
     },
 
     // ==========================================
@@ -134,27 +173,81 @@ const userSchema = new mongoose.Schema(
         ref: "User",
       },
     ],
-    isPrivate: {
-  type: Boolean,
-  default: false,
-},
 
-pendingFollowRequests: [
-  {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-  },
-],
+    // ==========================================
+    // PRIVACY
+    // ==========================================
+
+    isPrivate: {
+      type: Boolean,
+      default: false,
+    },
+
+    pendingFollowRequests: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
   },
   {
     timestamps: true,
+
+    // Indexes will be managed explicitly during migration.
+    autoIndex: false,
   }
 );
 
-const User =
-  mongoose.model(
-    "User",
-    userSchema
-  );
+// ==========================================
+// DATABASE INDEXES
+// ==========================================
+
+// Email must be unique when it exists.
+// Missing email is allowed for phone-only accounts.
+userSchema.index(
+  { email: 1 },
+  {
+    unique: true,
+    name: "email_1",
+    partialFilterExpression: {
+      email: {
+        $type: "string",
+        $gt: "",
+      },
+    },
+  }
+);
+
+// Firebase UID must be unique when it exists.
+userSchema.index(
+  { firebaseUid: 1 },
+  {
+    unique: true,
+    name: "firebaseUid_1",
+    partialFilterExpression: {
+      firebaseUid: {
+        $type: "string",
+        $gt: "",
+      },
+    },
+  }
+);
+
+// Phone number must be unique when it exists.
+userSchema.index(
+  { phoneNumber: 1 },
+  {
+    unique: true,
+    name: "phoneNumber_1",
+    partialFilterExpression: {
+      phoneNumber: {
+        $type: "string",
+        $gt: "",
+      },
+    },
+  }
+);
+
+const User = mongoose.model("User", userSchema);
 
 module.exports = User;
