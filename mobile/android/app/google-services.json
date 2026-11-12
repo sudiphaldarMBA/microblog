@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "408843342573",
+    "project_id": "microblog-3427c",
+    "storage_bucket": "microblog-3427c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:408843342573:android:1f20c03b4847822862b2e4",
+        "android_client_info": {
+          "package_name": "com.example.mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "408843342573-bq6j47hbb8t1fbrmfd0iok8ond70ttt6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.mobile",
+            "certificate_hash": "685c92c851eaace31ffd8e9905dfec8f9a183dca"
+          }
+        },
+        {
+          "client_id": "408843342573-s0csbt03ptu81to4gg81el0en6ndfpv3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAH4-ddiOJxcWPjTDL04fngIuLg8bn-RGg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "408843342573-s0csbt03ptu81to4gg81el0en6ndfpv3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

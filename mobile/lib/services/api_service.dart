@@ -290,6 +290,55 @@ class ApiService {
     return result;
   }
 
+  // ============================================================
+  // FIREBASE AUTHENTICATION (GOOGLE + PHONE OTP)
+  // ============================================================
+
+  static Future<Map<String, dynamic>> firebaseLogin({
+    required String idToken,
+    String? displayName,
+    String? username,
+  }) async {
+    if (idToken.trim().isEmpty) {
+      return {'success': false, 'message': 'Firebase ID token is required'};
+    }
+
+    final body = <String, dynamic>{'idToken': idToken.trim()};
+
+    if (displayName != null && displayName.trim().isNotEmpty) {
+      body['displayName'] = displayName.trim();
+    }
+
+    if (username != null && username.trim().isNotEmpty) {
+      body['username'] = username.trim();
+    }
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/firebase-login'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode(body),
+    );
+
+    final result = _decode(response);
+
+    // A new Firebase user may need to complete profile setup.
+    // In that case, the backend returns no MicroBlog JWT yet.
+    final token = result['data']?['token'];
+
+    if (result['success'] == true &&
+        token != null &&
+        token.toString().isNotEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+
+      await prefs.setString('token', token.toString());
+    }
+
+    return result;
+  }
+
   static Future<Map<String, dynamic>> getMe() async {
     final response = await http.get(
       Uri.parse('$baseUrl/auth/me'),
@@ -559,148 +608,123 @@ class ApiService {
   // RECORD POST VIEW
   // ============================================================
 
-  
-static Future<Map<String, dynamic>> recordView({
-  required String postId,
-}) async {
-  try {
-    debugPrint('========== RECORD VIEW START ==========');
-    debugPrint('Post ID: $postId');
-    debugPrint('API URL: $baseUrl/posts/$postId/view');
+  static Future<Map<String, dynamic>> recordView({
+    required String postId,
+  }) async {
+    try {
+      debugPrint('========== RECORD VIEW START ==========');
+      debugPrint('Post ID: $postId');
+      debugPrint('API URL: $baseUrl/posts/$postId/view');
 
-    final response = await http.post(
-      Uri.parse('$baseUrl/posts/$postId/view'),
-      headers: await _headers(),
-    );
+      final response = await http.post(
+        Uri.parse('$baseUrl/posts/$postId/view'),
+        headers: await _headers(),
+      );
 
-    debugPrint('HTTP STATUS: ${response.statusCode}');
-    debugPrint('HTTP RESPONSE: ${response.body}');
+      debugPrint('HTTP STATUS: ${response.statusCode}');
+      debugPrint('HTTP RESPONSE: ${response.body}');
 
-    await _handleUnauthorized(response);
+      await _handleUnauthorized(response);
 
-    final dynamic decoded = jsonDecode(response.body);
+      final dynamic decoded = jsonDecode(response.body);
 
-    if (decoded is Map<String, dynamic>) {
-      debugPrint('DECODED RESULT: $decoded');
-      debugPrint('========== RECORD VIEW END ==========');
-      return decoded;
+      if (decoded is Map<String, dynamic>) {
+        debugPrint('DECODED RESULT: $decoded');
+        debugPrint('========== RECORD VIEW END ==========');
+        return decoded;
+      }
+
+      return {'success': false, 'message': 'Unexpected server response'};
+    } catch (error) {
+      debugPrint('RECORD VIEW ERROR: $error');
+
+      return {'success': false, 'message': error.toString()};
     }
-
-    return {
-      'success': false,
-      'message': 'Unexpected server response',
-    };
-  } catch (error) {
-    debugPrint('RECORD VIEW ERROR: $error');
-
-    return {
-      'success': false,
-      'message': error.toString(),
-    };
   }
-}
   // ============================================================
   // COMMENTS AND NESTED REPLIES
   // ============================================================
 
+  static Future<Map<String, dynamic>> createComment({
+    required String postId,
+    required String content,
+    String? parentId,
+  }) async {
+    if (postId.trim().isEmpty) {
+      return {'success': false, 'message': 'Post ID is required'};
+    }
 
-static Future<Map<String, dynamic>> createComment({
-  required String postId,
-  required String content,
-  String? parentId,
-}) async {
-  if (postId.trim().isEmpty) {
-    return {
-      'success': false,
-      'message': 'Post ID is required',
-    };
+    if (content.trim().isEmpty) {
+      return {'success': false, 'message': 'Comment cannot be empty'};
+    }
+
+    final body = <String, dynamic>{'content': content.trim()};
+
+    if (parentId != null && parentId.trim().isNotEmpty) {
+      body['parentId'] = parentId.trim();
+    }
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/posts/$postId/comments'),
+      headers: await _headers(),
+      body: jsonEncode(body),
+    );
+
+    await _handleUnauthorized(response);
+    return _decode(response);
   }
 
-  if (content.trim().isEmpty) {
-    return {
-      'success': false,
-      'message': 'Comment cannot be empty',
-    };
+  static Future<Map<String, dynamic>> getComments({
+    required String postId,
+  }) async {
+    if (postId.trim().isEmpty) {
+      return {'success': false, 'message': 'Post ID is required'};
+    }
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/posts/$postId/comments'),
+      headers: await _headers(),
+    );
+
+    await _handleUnauthorized(response);
+    return _decode(response);
   }
 
-  final body = <String, dynamic>{
-    'content': content.trim(),
-  };
+  // ==========================================
+  // EDIT COMMENT
+  // ==========================================
+  static Future<Map<String, dynamic>> updateComment({
+    required String postId,
+    required String commentId,
+    required String content,
+  }) async {
+    final response = await http.put(
+      Uri.parse("$baseUrl/posts/$postId/comments/$commentId"),
+      headers: await _headers(),
+      body: jsonEncode({"content": content.trim()}),
+    );
 
-  if (parentId != null && parentId.trim().isNotEmpty) {
-    body['parentId'] = parentId.trim();
+    await _handleUnauthorized(response);
+
+    return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  final response = await http.post(
-    Uri.parse('$baseUrl/posts/$postId/comments'),
-    headers: await _headers(),
-    body: jsonEncode(body),
-  );
+  // ==========================================
+  // DELETE COMMENT
+  // ==========================================
+  static Future<Map<String, dynamic>> deleteComment({
+    required String postId,
+    required String commentId,
+  }) async {
+    final response = await http.delete(
+      Uri.parse("$baseUrl/posts/$postId/comments/$commentId"),
+      headers: await _headers(),
+    );
 
-  await _handleUnauthorized(response);
-  return _decode(response);
-}
+    await _handleUnauthorized(response);
 
-static Future<Map<String, dynamic>> getComments({
-  required String postId,
-}) async {
-  if (postId.trim().isEmpty) {
-    return {
-      'success': false,
-      'message': 'Post ID is required',
-    };
+    return jsonDecode(response.body) as Map<String, dynamic>;
   }
-
-  final response = await http.get(
-    Uri.parse('$baseUrl/posts/$postId/comments'),
-    headers: await _headers(),
-  );
-
-  await _handleUnauthorized(response);
-  return _decode(response);
-}
-
-// ==========================================
-// EDIT COMMENT
-// ==========================================
-static Future<Map<String, dynamic>> updateComment({
-  required String postId,
-  required String commentId,
-  required String content,
-}) async {
-  final response = await http.put(
-    Uri.parse(
-      "$baseUrl/posts/$postId/comments/$commentId",
-    ),
-    headers: await _headers(),
-    body: jsonEncode({
-      "content": content.trim(),
-    }),
-  );
-
-  await _handleUnauthorized(response);
-
-  return jsonDecode(response.body) as Map<String, dynamic>;
-}
-
-// ==========================================
-// DELETE COMMENT
-// ==========================================
-static Future<Map<String, dynamic>> deleteComment({
-  required String postId,
-  required String commentId,
-}) async {
-  final response = await http.delete(
-    Uri.parse(
-      "$baseUrl/posts/$postId/comments/$commentId",
-    ),
-    headers: await _headers(),
-  );
-
-  await _handleUnauthorized(response);
-
-  return jsonDecode(response.body) as Map<String, dynamic>;
-}
   // ============================================================
   // MY COMMENTED POSTS
   //
