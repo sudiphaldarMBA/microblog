@@ -173,22 +173,6 @@ const userSchema = new mongoose.Schema(
         ref: "User",
       },
     ],
-
-    // ==========================================
-    // PRIVACY
-    // ==========================================
-
-    isPrivate: {
-      type: Boolean,
-      default: false,
-    },
-
-    pendingFollowRequests: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-      },
-    ],
   },
   {
     timestamps: true,

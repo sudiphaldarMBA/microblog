@@ -31,33 +31,30 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   // ============================================================
-// COLORS
-// ============================================================
+  // COLORS
+  // ============================================================
 
-static const Color _accent = Color(0xFFF91880);
-static const Color _red = Color(0xFFF91880);
-static const Color _green = Color(0xFF00BA7C);
+  static const Color _accent = Color(0xFFF91880);
+  static const Color _red = Color(0xFFF91880);
+  static const Color _green = Color(0xFF00BA7C);
 
-bool get _dark =>
-    Theme.of(context).brightness == Brightness.dark;
+  bool get _dark => Theme.of(context).brightness == Brightness.dark;
 
-Color get _background =>
-    _dark ? const Color(0xFF08090B) : const Color(0xFFF7F8FA);
+  Color get _background =>
+      _dark ? const Color(0xFF08090B) : const Color(0xFFF7F8FA);
 
-Color get _surface =>
-    _dark ? const Color(0xFF15171B) : const Color(0xFFFFFFFF);
+  Color get _surface =>
+      _dark ? const Color(0xFF15171B) : const Color(0xFFFFFFFF);
 
-Color get _text =>
-    _dark ? const Color(0xFFFFFFFF) : const Color(0xFF111318);
+  Color get _text => _dark ? const Color(0xFFFFFFFF) : const Color(0xFF111318);
 
-Color get _muted =>
-    _dark ? const Color(0xFF9297A0) : const Color(0xFF737B86);
+  Color get _muted => _dark ? const Color(0xFF9297A0) : const Color(0xFF737B86);
 
-Color get _divider =>
-    _dark ? const Color(0xFF282B31) : const Color(0xFFE6E8EC);
+  Color get _divider =>
+      _dark ? const Color(0xFF282B31) : const Color(0xFFE6E8EC);
 
-Color get _composer =>
-    _dark ? const Color(0xFF202329) : const Color(0xFFF0F1F4);
+  Color get _composer =>
+      _dark ? const Color(0xFF202329) : const Color(0xFFF0F1F4);
   // ============================================================
   // CONTROLLERS
   // ============================================================
@@ -809,15 +806,15 @@ Color get _composer =>
         ? Map<String, dynamic>.from(repostOfRaw)
         : null;
 
-    final isPlainRepost = repostOf != null && content.isEmpty;
+    final dynamic mediaSource = repostOf ?? post;
 
-    final dynamic rawImageMedia = isPlainRepost
-        ? (repostOf['image'] ?? repostOf['imageUrl'] ?? repostOf['mediaUrl'])
-        : (post['image'] ?? post['imageUrl'] ?? post['mediaUrl']);
+    final dynamic rawImageMedia =
+        mediaSource['image'] ??
+        mediaSource['imageUrl'] ??
+        mediaSource['mediaUrl'];
 
-    final dynamic rawVideoMedia = isPlainRepost
-        ? (repostOf['video'] ?? repostOf['videoUrl'])
-        : (post['video'] ?? post['videoUrl']);
+    final dynamic rawVideoMedia =
+        mediaSource['video'] ?? mediaSource['videoUrl'];
 
     File? mediaFile;
 
@@ -1120,36 +1117,31 @@ Color get _composer =>
 
     final isPlainRepost = isRepost && !isQuoteRepost;
 
-    final Map<String, dynamic> author;
-    final String content;
+    final Map<String, dynamic> mediaSource = repostOf ?? post;
 
-    final dynamic rawImageMedia;
-    final dynamic rawVideoMedia;
+    // The reposter is always the main author in Home feed.
+    final Map<String, dynamic> author = repostAuthor;
 
-    if (isPlainRepost) {
-      final originalAuthorRaw = repostOf['author'];
+    // Only the reposter's own caption appears above the original post.
+    final String content = post['content']?.toString() ?? '';
 
-      author = originalAuthorRaw is Map
-          ? Map<String, dynamic>.from(originalAuthorRaw)
-          : <String, dynamic>{};
+    // Always get media from the original post when this is a repost.
+    final dynamic rawImageMedia =
+        mediaSource['image'] ??
+        mediaSource['imageUrl'] ??
+        mediaSource['mediaUrl'];
 
-      content = repostOf['content']?.toString() ?? '';
+    final dynamic rawVideoMedia =
+        mediaSource['video'] ?? mediaSource['videoUrl'];
 
-      // Pull media from original post.
-      rawImageMedia =
-          repostOf['image'] ?? repostOf['imageUrl'] ?? repostOf['mediaUrl'];
+    final Map<String, dynamic> originalAuthor = repostOf?['author'] is Map
+        ? Map<String, dynamic>.from(repostOf!['author'])
+        : <String, dynamic>{};
 
-      rawVideoMedia = repostOf['video'] ?? repostOf['videoUrl'];
-    } else {
-      author = repostAuthor;
-
-      content = post['content']?.toString() ?? '';
-
-      // Pull media directly from post.
-      rawImageMedia = post['image'] ?? post['imageUrl'] ?? post['mediaUrl'];
-
-      rawVideoMedia = post['video'] ?? post['videoUrl'];
-    }
+    final String originalName = _displayName(originalAuthor);
+    final String originalUsername = _username(originalAuthor);
+    final dynamic originalAvatar = originalAuthor['avatar'];
+    final String originalContent = repostOf?['content']?.toString() ?? '';
 
     final name = _displayName(author);
 
@@ -1180,9 +1172,6 @@ Color get _composer =>
     final String media = rawImageMedia?.toString().trim() ?? '';
 
     final String videoMedia = rawVideoMedia?.toString().trim() ?? '';
-
-    // Multiple media (max 10 photos / 5 videos per post).
-    final dynamic mediaSource = isPlainRepost ? repostOf : post;
 
     final List<String> imageList = _mediaItems(
       mediaSource['images'],
@@ -1221,6 +1210,93 @@ Color get _composer =>
       );
     }
 
+    Widget buildPostMedia() {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (imageList.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: GestureDetector(
+                onTap: openDetail,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: imageList.length > 1
+                      ? _MediaPager(
+                          height: 380,
+                          children: [
+                            for (final item in imageList) _media(item),
+                          ],
+                        )
+                      : _media(imageList.first),
+                ),
+              ),
+            ),
+
+          if (videoList.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  color: Colors.black,
+                  child: videoList.length > 1
+                      ? _MediaPager(
+                          height: MediaQuery.of(context).size.height * .6,
+                          children: [
+                            for (final item in videoList)
+                              Stack(
+                                children: [
+                                  ClipRect(
+                                    child: OverflowBox(
+                                      minHeight: 0,
+                                      maxHeight: double.infinity,
+                                      alignment: Alignment.center,
+                                      child: HomeVideoPlayer(videoData: item),
+                                    ),
+                                  ),
+                                  Positioned.fill(
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () => _openVideoFeed(id),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        )
+                      : ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: MediaQuery.of(context).size.height * .6,
+                          ),
+                          child: Stack(
+                            children: [
+                              ClipRect(
+                                child: OverflowBox(
+                                  minHeight: 0,
+                                  maxHeight: double.infinity,
+                                  alignment: Alignment.center,
+                                  child: HomeVideoPlayer(
+                                    videoData: videoList.first,
+                                  ),
+                                ),
+                              ),
+                              Positioned.fill(
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () => _openVideoFeed(id),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
     return VisibilityDetector(
       key: Key('home-post-$id'),
       onVisibilityChanged: (info) {
@@ -1229,16 +1305,13 @@ Color get _composer =>
         }
       },
       child: Container(
-  margin: const EdgeInsets.symmetric(
-    horizontal: 6,
-    vertical: 1.2,
-  ),
-  decoration: BoxDecoration(
-    color: _surface,
-    borderRadius: BorderRadius.circular(22),
-  ),
-  clipBehavior: Clip.antiAlias,
-  child: Column(
+        margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.2),
+        decoration: BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.circular(22),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
           children: [
             // ------------------------------------------------------
             // REPOST LABEL
@@ -1383,334 +1456,351 @@ Color get _composer =>
 
                   // Everything below starts at the card's left edge.
                   Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // ------------------------------------------------
-                        // TEXT CONTENT
-                        // ------------------------------------------------
-                        if (content.trim().isNotEmpty) ...[
-                          const SizedBox(height: 12),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ------------------------------------------------
+                      // TEXT CONTENT
+                      // ------------------------------------------------
+                      if (content.trim().isNotEmpty) ...[
+                        const SizedBox(height: 12),
 
-                          GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: openDetail,
-                            child: Text(
-                              content,
-                              style: TextStyle(
-                                color: _text,
-                                fontSize: 16,
-                                height: 1.42,
-                              ),
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: openDetail,
+                          child: Text(
+                            content,
+                            style: TextStyle(
+                              color: _text,
+                              fontSize: 16,
+                              height: 1.42,
                             ),
                           ),
-                        ],
+                        ),
+                      ],
 
-                        // ------------------------------------------------
-                        // QUOTE REPOST EMBED
-                        // ------------------------------------------------
-                        if (isQuoteRepost)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 10),
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: _divider),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      _avatar(
-                                        repostOf['author'] is Map
-                                            ? repostOf['author']
-                                            : <String, dynamic>{},
-                                        _displayName(
-                                          repostOf['author'] is Map
-                                              ? Map<String, dynamic>.from(
-                                                  repostOf['author'],
-                                                )
-                                              : <String, dynamic>{},
-                                        ),
-                                        13,
+                      // ------------------------------------------------
+                      // QUOTE REPOST EMBED
+                      // ------------------------------------------------
+                      if (isRepost)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: _divider),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // ORIGINAL AUTHOR HEADER
+                                Row(
+                                  children: [
+                                    GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () =>
+                                          _openAuthorProfile(originalAuthor),
+                                      child: _avatar(
+                                        originalAvatar,
+                                        originalName,
+                                        17,
                                       ),
-
-                                      const SizedBox(width: 7),
-
-                                      Flexible(
-                                        child: Text(
-                                          _displayName(
-                                            repostOf['author'] is Map
-                                                ? Map<String, dynamic>.from(
-                                                    repostOf['author'],
-                                                  )
-                                                : <String, dynamic>{},
+                                    ),
+                                    const SizedBox(width: 9),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          GestureDetector(
+                                            behavior: HitTestBehavior.opaque,
+                                            onTap: () => _openAuthorProfile(
+                                              originalAuthor,
+                                            ),
+                                            child: Text(
+                                              originalName,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color: _text,
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                            ),
                                           ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: _text,
-                                            fontSize: 13.5,
-                                            fontWeight: FontWeight.w700,
+                                          const SizedBox(height: 2),
+                                          Row(
+                                            children: [
+                                              if (originalUsername.isNotEmpty)
+                                                Flexible(
+                                                  child: Text(
+                                                    '@$originalUsername',
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      color: _muted,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ),
+                                              if (originalUsername.isNotEmpty)
+                                                const SizedBox(width: 6),
+                                              Text(
+                                                '· ${_timeAgo(repostOf['createdAt'])}',
+                                                style: TextStyle(
+                                                  color: _muted,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                        ),
-                                      ),
-
-                                      const SizedBox(width: 4),
-
-                                      Text(
-                                        _timeAgo(repostOf['createdAt']),
-                                        style: TextStyle(
-                                          color: _muted,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-
-                                  if (repostOf['content']
-                                          ?.toString()
-                                          .trim()
-                                          .isNotEmpty ==
-                                      true) ...[
-                                    const SizedBox(height: 6),
-
-                                    Text(
-                                      repostOf['content'].toString(),
-                                      maxLines: 4,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: _text,
-                                        fontSize: 14.5,
-                                        height: 1.35,
+                                        ],
                                       ),
                                     ),
                                   ],
-                                ],
-                              ),
-                            ),
-                          ),
-
-                        // ------------------------------------------------
-                        // LOCATION
-                        // ------------------------------------------------
-                        if (location.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.location_on_outlined,
-                                  size: 16,
-                                  color: _muted,
                                 ),
 
-                                const SizedBox(width: 4),
-
-                                Flexible(
-                                  child: Text(
-                                    location,
+                                // ORIGINAL POST CAPTION
+                                if (originalContent.trim().isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    originalContent,
                                     style: TextStyle(
-                                      color: _muted,
-                                      fontSize: 13.5,
+                                      color: _text,
+                                      fontSize: 14.5,
+                                      height: 1.4,
                                     ),
                                   ),
-                                ),
+                                ],
+
+                                // ORIGINAL POST PHOTO / VIDEO
+                                buildPostMedia(),
                               ],
                             ),
                           ),
+                        ),
 
-                        // ------------------------------------------------
-                        // IMAGE MEDIA
-                        // ------------------------------------------------
-                        if (imageList.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 10),
-                            child: GestureDetector(
-                              onTap: openDetail,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: imageList.length > 1
-                                    ? _MediaPager(
-                                        height: 380,
-                                        children: [
-                                          for (final item in imageList)
-                                            _media(item),
-                                        ],
-                                      )
-                                    : _media(imageList.first),
+                      // ------------------------------------------------
+                      // LOCATION
+                      // ------------------------------------------------
+                      if (location.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.location_on_outlined,
+                                size: 16,
+                                color: _muted,
                               ),
-                            ),
-                          ),
 
-                        // ------------------------------------------------
-                        // VIDEO MEDIA
-                        // ------------------------------------------------
-                        if (videoList.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 10),
+                              const SizedBox(width: 4),
+
+                              Flexible(
+                                child: Text(
+                                  location,
+                                  style: TextStyle(
+                                    color: _muted,
+                                    fontSize: 13.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      // ------------------------------------------------
+                      // IMAGE MEDIA
+                      // ------------------------------------------------
+                      if (!isRepost && imageList.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: GestureDetector(
+                            onTap: openDetail,
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(16),
-                              child: Container(
-                                color: Colors.black,
-                                child: videoList.length > 1
-                                    ? _MediaPager(
-                                        height:
-                                            MediaQuery.of(context).size.height *
-                                            .6,
-                                        children: [
-                                          for (final item in videoList)
-                                            Stack(
-                                              children: [
-                                                ClipRect(
- child: OverflowBox(
- minHeight: 0,
- maxHeight: double.infinity,
- alignment: Alignment.center,
- child: HomeVideoPlayer(videoData: item),
- ),
- ),
-                                                Positioned.fill(
-                                                  child: GestureDetector(
-                                                    behavior:
-                                                        HitTestBehavior.opaque,
-                                                    onTap: () =>
-                                                        _openVideoFeed(id),
+                              child: imageList.length > 1
+                                  ? _MediaPager(
+                                      height: 380,
+                                      children: [
+                                        for (final item in imageList)
+                                          _media(item),
+                                      ],
+                                    )
+                                  : _media(imageList.first),
+                            ),
+                          ),
+                        ),
+
+                      // ------------------------------------------------
+                      // VIDEO MEDIA
+                      // ------------------------------------------------
+                      if (!isRepost && videoList.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              color: Colors.black,
+                              child: videoList.length > 1
+                                  ? _MediaPager(
+                                      height:
+                                          MediaQuery.of(context).size.height *
+                                          .6,
+                                      children: [
+                                        for (final item in videoList)
+                                          Stack(
+                                            children: [
+                                              ClipRect(
+                                                child: OverflowBox(
+                                                  minHeight: 0,
+                                                  maxHeight: double.infinity,
+                                                  alignment: Alignment.center,
+                                                  child: HomeVideoPlayer(
+                                                    videoData: item,
                                                   ),
                                                 ),
-                                              ],
-                                            ),
-                                        ],
-                                      )
-                                    : ConstrainedBox(
-                                        constraints: BoxConstraints(
-                                          maxHeight:
-                                              MediaQuery.of(
-                                                context,
-                                              ).size.height *
-                                              .6,
-                                        ),
-                                        child: Stack(
-                                          children: [
-                                            ClipRect(
- child: OverflowBox(
- minHeight: 0,
- maxHeight: double.infinity,
- alignment: Alignment.center,
- child: HomeVideoPlayer(videoData: videoList.first),
- ),
- ),
-                                            Positioned.fill(
-                                              child: GestureDetector(
-                                                behavior:
-                                                    HitTestBehavior.opaque,
-                                                onTap: () => _openVideoFeed(id),
+                                              ),
+                                              Positioned.fill(
+                                                child: GestureDetector(
+                                                  behavior:
+                                                      HitTestBehavior.opaque,
+                                                  onTap: () =>
+                                                      _openVideoFeed(id),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                      ],
+                                    )
+                                  : ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        maxHeight:
+                                            MediaQuery.of(context).size.height *
+                                            .6,
+                                      ),
+                                      child: Stack(
+                                        children: [
+                                          ClipRect(
+                                            child: OverflowBox(
+                                              minHeight: 0,
+                                              maxHeight: double.infinity,
+                                              alignment: Alignment.center,
+                                              child: HomeVideoPlayer(
+                                                videoData: videoList.first,
                                               ),
                                             ),
-                                          ],
-                                        ),
+                                          ),
+                                          Positioned.fill(
+                                            child: GestureDetector(
+                                              behavior: HitTestBehavior.opaque,
+                                              onTap: () => _openVideoFeed(id),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                              ),
-                            ),
-                          ),
-
-                        // ------------------------------------------------
-                        // POLL
-                        // ------------------------------------------------
-                        if (poll != null) _pollPreview(poll, id),
-
-                        const SizedBox(height: 8),
-
-                        // ------------------------------------------------------
-                        // VIEW COUNT
-                        // ------------------------------------------------------
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Padding(
-                            padding: const EdgeInsets.only(right: 4),
-                            child: Text(
-                              '${_formatCount(views)} views',
-                              style: TextStyle(
-                                color: _muted,
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w700,
-                              ),
+                                    ),
                             ),
                           ),
                         ),
 
-                        const SizedBox(height: 2),
+                      // ------------------------------------------------
+                      // POLL
+                      // ------------------------------------------------
+                      if (poll != null) _pollPreview(poll, id),
 
-                        // ------------------------------------------------
-                        // ACTION BAR
-                        // ------------------------------------------------
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            // LIKE
-                            _actionButton(
-                              icon: liked
-                                  ? CupertinoIcons.heart_fill
-                                  : CupertinoIcons.heart,
-                              count: likes,
-                              color: liked ? _red : _muted,
-                              active: liked,
-                              loading: _likeLoading.contains(id),
-                              onTap: () {
-                                _toggleLike(id);
-                              },
-                            ),
+                      const SizedBox(height: 8),
 
-                            // COMMENT
-                            _actionButton(
-                              icon: CupertinoIcons.bubble_left,
-                              count: comments,
+                      // ------------------------------------------------------
+                      // VIEW COUNT
+                      // ------------------------------------------------------
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: Text(
+                            '${_formatCount(views)} views',
+                            style: TextStyle(
                               color: _muted,
-                              onTap: () {
-                                _openComments(id);
-                              },
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
                             ),
-
-                            // REPOST
-                            _actionButton(
-                              icon: CupertinoIcons.arrow_2_squarepath,
-                              count: reposts,
-                              color: _muted,
-                              loading: _repostLoading.contains(id),
-                              onTap: () {
-                                _repost(post);
-                              },
-                            ),
-
-                            // SHARE
-                            _actionButton(
-                              icon: CupertinoIcons.arrowshape_turn_up_right,
-                              count: shares,
-                              color: _muted,
-                              onTap: () {
-                                _sharePost(post);
-                              },
-                            ),
-
-                            // BOOKMARK
-                            _actionButton(
-                              icon: saved
-                                  ? CupertinoIcons.bookmark_fill
-                                  : CupertinoIcons.bookmark,
-                              count: 0,
-                              color: saved ? _accent : _muted,
-                              active: saved,
-                              loading: _bookmarkLoading.contains(id),
-                              onTap: () {
-                                _toggleBookmark(id);
-                              },
-                              showCount: false,
-                            ),
-                          ],
+                          ),
                         ),
-                      ],
+                      ),
+
+                      const SizedBox(height: 2),
+
+                      // ------------------------------------------------
+                      // ACTION BAR
+                      // ------------------------------------------------
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // LIKE
+                          _actionButton(
+                            icon: liked
+                                ? CupertinoIcons.heart_fill
+                                : CupertinoIcons.heart,
+                            count: likes,
+                            color: liked ? _red : _muted,
+                            active: liked,
+                            loading: _likeLoading.contains(id),
+                            onTap: () {
+                              _toggleLike(id);
+                            },
+                          ),
+
+                          // COMMENT
+                          _actionButton(
+                            icon: CupertinoIcons.bubble_left,
+                            count: comments,
+                            color: _muted,
+                            onTap: () {
+                              _openComments(id);
+                            },
+                          ),
+
+                          // REPOST
+                          _actionButton(
+                            icon: CupertinoIcons.arrow_2_squarepath,
+                            count: reposts,
+                            color: _muted,
+                            loading: _repostLoading.contains(id),
+                            onTap: () {
+                              _repost(post);
+                            },
+                          ),
+
+                          // SHARE
+                          _actionButton(
+                            icon: CupertinoIcons.arrowshape_turn_up_right,
+                            count: shares,
+                            color: _muted,
+                            onTap: () {
+                              _sharePost(post);
+                            },
+                          ),
+
+                          // BOOKMARK
+                          _actionButton(
+                            icon: saved
+                                ? CupertinoIcons.bookmark_fill
+                                : CupertinoIcons.bookmark,
+                            count: 0,
+                            color: saved ? _accent : _muted,
+                            active: saved,
+                            loading: _bookmarkLoading.contains(id),
+                            onTap: () {
+                              _toggleBookmark(id);
+                            },
+                            showCount: false,
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1987,156 +2077,154 @@ Color get _composer =>
   // SETTINGS
   // ============================================================
 
-  
-Widget _bottomNavigation() {
-  return SafeArea(
-    top: false,
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-      child: Container(
-        height: 60,
-        decoration: BoxDecoration(
-          color: _surface,
-          borderRadius: BorderRadius.circular(26),
-          border: Border.all(color: _divider, width: 0.8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(_dark ? .35 : .08),
-              blurRadius: 18,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            _bottomNavItem(
-              icon: Icons.home_outlined,
-              activeIcon: Icons.home_rounded,
-              index: 0,
-              label: 'Home',
-            ),
-            _bottomNavItem(
-              icon: Icons.smart_display_outlined,
-              activeIcon: Icons.smart_display_rounded,
-              index: 1,
-              label: 'Shorts',
-            ),
-            _buildCreateNavButton(),
-            _bottomNavItem(
-              iconSize: 20,
-              icon: CupertinoIcons.bookmark,
-              activeIcon: CupertinoIcons.bookmark_fill,
-              index: 3,
-              label: 'Saved',
-            ),
-            _bottomNavItem(
-              icon: Icons.settings_outlined,
-              activeIcon: Icons.settings_rounded,
-              index: 4,
-              label: 'Settings',
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-Widget _bottomNavItem({
-  double iconSize = 24,
-  required IconData icon,
-  required IconData activeIcon,
-  required int index,
-  required String label,
-}) {
-  final active = _currentNavigationIndex == index;
-
-  return Expanded(
-    child: Semantics(
-      button: true,
-      label: label,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => _onBottomNavigationTap(index),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeInOut,
-          margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
+  Widget _bottomNavigation() {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+        child: Container(
+          height: 60,
           decoration: BoxDecoration(
-            color: active ? _composer : Colors.transparent,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SizedBox(
-                width: 26,
-                height: 26,
-                child: Center(
-                  child: Icon(
-                    active ? activeIcon : icon,
-                    size: iconSize,
-                    color: active ? _text : _muted,
-                    // Slightly bolder strokes.
-                    shadows: [
-                      Shadow(
-                        color: active ? _text : _muted,
-                        offset: const Offset(.5, 0),
-                      ),
-                      Shadow(
-                        color: active ? _text : _muted,
-                        offset: const Offset(-.5, 0),
-                      ),
-                    ],
-                  ),
-                ),
+            color: _surface,
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: _divider, width: 0.8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(_dark ? .35 : .08),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
               ),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                maxLines: 1,
-                style: TextStyle(
-                  color: active ? _text : _muted,
-                  fontSize: 10.5,
-                  fontWeight: active ? FontWeight.w800 : FontWeight.w700,
-                ),
+            ],
+          ),
+          child: Row(
+            children: [
+              _bottomNavItem(
+                icon: Icons.home_outlined,
+                activeIcon: Icons.home_rounded,
+                index: 0,
+                label: 'Home',
+              ),
+              _bottomNavItem(
+                icon: Icons.smart_display_outlined,
+                activeIcon: Icons.smart_display_rounded,
+                index: 1,
+                label: 'Shorts',
+              ),
+              _buildCreateNavButton(),
+              _bottomNavItem(
+                iconSize: 20,
+                icon: CupertinoIcons.bookmark,
+                activeIcon: CupertinoIcons.bookmark_fill,
+                index: 3,
+                label: 'Saved',
+              ),
+              _bottomNavItem(
+                icon: Icons.settings_outlined,
+                activeIcon: Icons.settings_rounded,
+                index: 4,
+                label: 'Settings',
               ),
             ],
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
-Widget _buildCreateNavButton() {
-  return Expanded(
-    child: Center(
+  Widget _bottomNavItem({
+    double iconSize = 24,
+    required IconData icon,
+    required IconData activeIcon,
+    required int index,
+    required String label,
+  }) {
+    final active = _currentNavigationIndex == index;
+
+    return Expanded(
       child: Semantics(
         button: true,
-        label: 'Create post',
+        label: label,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: _openCreatePost,
-          child: Container(
-            width: 54,
-            height: 54,
+          onTap: () => _onBottomNavigationTap(index),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeInOut,
+            margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
             decoration: BoxDecoration(
-              color: _dark ? Colors.white : const Color(0xFF111318),
-              shape: BoxShape.circle,
+              color: active ? _composer : Colors.transparent,
+              borderRadius: BorderRadius.circular(18),
             ),
-            child: Icon(
-              CupertinoIcons.plus,
-              size: 28,
-              color: _dark ? const Color(0xFF111318) : Colors.white,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 26,
+                  height: 26,
+                  child: Center(
+                    child: Icon(
+                      active ? activeIcon : icon,
+                      size: iconSize,
+                      color: active ? _text : _muted,
+                      // Slightly bolder strokes.
+                      shadows: [
+                        Shadow(
+                          color: active ? _text : _muted,
+                          offset: const Offset(.5, 0),
+                        ),
+                        Shadow(
+                          color: active ? _text : _muted,
+                          offset: const Offset(-.5, 0),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  maxLines: 1,
+                  style: TextStyle(
+                    color: active ? _text : _muted,
+                    fontSize: 10.5,
+                    fontWeight: active ? FontWeight.w800 : FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
+  Widget _buildCreateNavButton() {
+    return Expanded(
+      child: Center(
+        child: Semantics(
+          button: true,
+          label: 'Create post',
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _openCreatePost,
+            child: Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                color: _dark ? Colors.white : const Color(0xFF111318),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                CupertinoIcons.plus,
+                size: 28,
+                color: _dark ? const Color(0xFF111318) : Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   // ============================================================
   // BOTTOM NAV ACTION
@@ -2253,7 +2341,8 @@ Widget _buildCreateNavButton() {
       _currentUser?['_id']?.toString() ?? _currentUser?['id']?.toString() ?? '';
 
   dynamic _avatarFor(Map<String, dynamic> author) {
-    final authorId = author['_id']?.toString() ?? author['id']?.toString() ?? '';
+    final authorId =
+        author['_id']?.toString() ?? author['id']?.toString() ?? '';
 
     if (_myId.isNotEmpty && authorId == _myId) {
       return _currentUser?['avatar'];
@@ -2320,10 +2409,10 @@ Widget _buildCreateNavButton() {
 
       final caption = post['content']?.toString().trim() ?? '';
 
-      final Map<String, dynamic> source =
-          (repostOf != null && caption.isEmpty) ? repostOf : post;
+      final Map<String, dynamic> source = repostOf ?? post;
 
-      final video = (source['video'] ?? source['videoUrl'])?.toString().trim() ?? '';
+      final video =
+          (source['video'] ?? source['videoUrl'])?.toString().trim() ?? '';
 
       if (video.isEmpty) continue;
 
@@ -2716,66 +2805,66 @@ Widget _buildCreateNavButton() {
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverAppBar(
-        backgroundColor: _surface,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        floating: true,
-        snap: true,
-        pinned: false,
-        toolbarHeight: 48,
-        centerTitle: true,
+              backgroundColor: _surface,
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              floating: true,
+              snap: true,
+              pinned: false,
+              toolbarHeight: 48,
+              centerTitle: true,
 
-        // Hairline under the app bar, matching the line above the
-        // bottom navigation so the two bars frame the feed evenly.
-        shape: Border(bottom: BorderSide(color: _divider, width: 0.8)),
+              // Hairline under the app bar, matching the line above the
+              // bottom navigation so the two bars frame the feed evenly.
+              shape: Border(bottom: BorderSide(color: _divider, width: 0.8)),
 
-        leading: IconButton(
-          tooltip: 'Profile',
-          onPressed: _openProfile,
-          icon: _loadingUser
-              ? SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: _accent,
-                  ),
-                )
-              : _avatar(
-                  _currentUser?['avatar'],
-                  _displayName(_currentUser ?? {}),
-                  16,
+              leading: IconButton(
+                tooltip: 'Profile',
+                onPressed: _openProfile,
+                icon: _loadingUser
+                    ? SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: _accent,
+                        ),
+                      )
+                    : _avatar(
+                        _currentUser?['avatar'],
+                        _displayName(_currentUser ?? {}),
+                        16,
+                      ),
+              ),
+
+              title: Text(
+                'MicroBlog',
+                style: TextStyle(
+                  color: _text,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -.4,
                 ),
-        ),
+              ),
 
-        title: Text(
-          'MicroBlog',
-          style: TextStyle(
-            color: _text,
-            fontSize: 20,
-            fontWeight: FontWeight.w900,
-            letterSpacing: -.4,
-          ),
-        ),
-
-        actions: [
-          IconButton(
-            tooltip: 'Search',
-            onPressed: () async {
-              await Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (_) => const SearchScreen()));
-            },
-            icon: _boldIcon(CupertinoIcons.search, 25, _text),
-          ),
-          IconButton(
-            tooltip: 'Notifications',
-            onPressed: _openNotifications,
-            icon: _boldIcon(CupertinoIcons.bell, 25, _text),
-          ),
-        ],
-      ),
+              actions: [
+                IconButton(
+                  tooltip: 'Search',
+                  onPressed: () async {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const SearchScreen()),
+                    );
+                  },
+                  icon: _boldIcon(CupertinoIcons.search, 25, _text),
+                ),
+                IconButton(
+                  tooltip: 'Notifications',
+                  onPressed: _openNotifications,
+                  icon: _boldIcon(CupertinoIcons.bell, 25, _text),
+                ),
+              ],
+            ),
             if (_loadingPosts)
               const SliverFillRemaining(
                 hasScrollBody: false,

@@ -35,6 +35,13 @@ router.get(
   postController.getMyStats
 );
 
+// Posts commented on by a particular user
+router.get(
+  '/user/:userId/commented',
+  authMiddleware,
+  postController.getMyCommentedPosts
+);
+
 // ============================================================
 // BOOKMARKS
 // IMPORTANT: Keep /bookmarks before /:postId routes.

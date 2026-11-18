@@ -58,8 +58,6 @@ function buildUserResponse(user) {
         ? user.following.length
         : 0,
 
-    isPrivate: Boolean(user.isPrivate),
-
     createdAt: user.createdAt,
   };
 }
@@ -783,7 +781,6 @@ exports.updateProfile = async (req, res) => {
   location,
   website,
   dateOfBirth,
-  isPrivate,
 } = req.body;
     console.log('DOB RECEIVED BY BACKEND:', req.body.dateOfBirth);
     // --------------------------------------------------------
@@ -1053,26 +1050,6 @@ exports.updateProfile = async (req, res) => {
       }
     }
 
-    // --------------------------------------------------------
-// ACCOUNT PRIVACY
-// --------------------------------------------------------
-
-if (isPrivate !== undefined) {
-  if (typeof isPrivate !== "boolean") {
-    return res.status(400).json({
-      success: false,
-      message: "isPrivate must be true or false",
-    });
-  }
-
-  user.isPrivate = isPrivate;
-
-  // If the account becomes public, pending approval is no
-  // longer necessary. Users can follow the public account.
-  if (isPrivate === false) {
-    user.pendingFollowRequests = [];
-  }
-}
     // --------------------------------------------------------
     // SAVE
     // --------------------------------------------------------

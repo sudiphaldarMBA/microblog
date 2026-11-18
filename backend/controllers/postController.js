@@ -953,147 +953,110 @@ exports.deleteComment = async (req, res) => {
 // GET POSTS COMMENTED ON BY CURRENT USER
 // ============================================================
 
+
 exports.getMyCommentedPosts = async (req, res) => {
   try {
-    const userId = req.userId;
+    const profileUserId = req.params.userId || req.userId;
+    const viewerId = req.userId;
 
-    if (!userId) {
+    if (!profileUserId || !mongoose.Types.ObjectId.isValid(profileUserId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID",
+      });
+    }
+
+    if (!viewerId) {
       return res.status(401).json({
         success: false,
         message: "Authenticated user not found",
       });
     }
 
-    // ----------------------------------------------------------
-    // Find comments written by the current user.
-    // ----------------------------------------------------------
-
     const comments = await Comment.find({
-      author: userId,
+      author: profileUserId,
     })
-      .sort({
-        createdAt: -1,
-      })
+      .sort({ createdAt: -1 })
       .populate({
         path: "post",
         populate: [
           {
             path: "author",
-            select:
-  "displayName username avatar coverPhoto",
+            select: "displayName username avatar coverPhoto",
           },
           {
             path: "repostOf",
             populate: {
               path: "author",
-              select:
-  "displayName username avatar coverPhoto",
+              select: "displayName username avatar coverPhoto",
             },
           },
         ],
       });
 
-    // ----------------------------------------------------------
-    // Remove deleted/missing posts and duplicate posts.
-    // ----------------------------------------------------------
-
     const seen = new Set();
-
     const posts = [];
 
     for (const comment of comments) {
       const post = comment.post;
 
-      if (!post) {
-  continue;
-}
+      if (!post) continue;
 
-if (!(await canViewPost(post, userId))) {
-  continue;
-}
+      if (!(await canViewPost(post, viewerId))) continue;
 
-const postId =
-  post._id.toString();
+      const postId = post._id.toString();
 
-      if (seen.has(postId)) {
-        continue;
-      }
+      if (seen.has(postId)) continue;
 
       seen.add(postId);
-
       posts.push(post);
     }
 
-    // ----------------------------------------------------------
-    // Add the same useful information returned by getPosts().
-    // ----------------------------------------------------------
+    const formattedPosts = await Promise.all(
+      posts.map(async (post) => {
+        const likes = Array.isArray(post.likes) ? post.likes : [];
 
-    const formattedPosts =
-      await Promise.all(
-        posts.map(async (post) => {
-          const likes =
-            Array.isArray(post.likes)
-              ? post.likes
-              : [];
+        const likedByMe = likes.some(
+          (id) => id.toString() === viewerId.toString()
+        );
 
-          const likedByMe =
-            likes.some(
-              (id) =>
-                id.toString() ===
-                userId.toString()
-            );
+        const commentsCount = await Comment.countDocuments({
+          post: post._id,
+        });
 
-          const commentsCount =
-            await Comment.countDocuments({
-              post: post._id,
-            });
+        const bookmark = await Bookmark.exists({
+          user: viewerId,
+          post: post._id,
+        });
 
-          const bookmark =
-            await Bookmark.exists({
-              user: userId,
-              post: post._id,
-            });
-
-          return {
-            ...post.toObject(),
-
-            likesCount:
-              likes.length,
-
-            likedByMe,
-
-            bookmarkedByMe:
-              !!bookmark,
-
-            commentsCount,
-
-            repostsCount:
-              post.repostsCount || 0,
-          };
-        })
-      );
+        return {
+          ...post.toObject(),
+          likesCount: likes.length,
+          likedByMe,
+          bookmarkedByMe: !!bookmark,
+          commentsCount,
+          repostsCount: post.repostsCount || 0,
+        };
+      })
+    );
 
     return res.status(200).json({
       success: true,
-      message:
-        "Commented posts retrieved successfully",
+      message: "Commented posts retrieved successfully",
       data: {
         posts: formattedPosts,
       },
     });
   } catch (error) {
-    console.error(
-      "Get My Commented Posts Error:",
-      error
-    );
+    console.error("Get Commented Posts Error:", error);
 
     return res.status(500).json({
       success: false,
-      message:
-        "Server error while retrieving commented posts",
+      message: "Server error while retrieving commented posts",
     });
   }
 };
+
 
 // ============================================================
 // BOOKMARK / UNBOOKMARK

@@ -741,6 +741,28 @@ class ApiService {
   // 4. Returns the corresponding posts.
   // ============================================================
 
+
+  static Future<Map<String, dynamic>> getUserCommentedPosts({
+    required String userId,
+  }) async {
+    if (userId.trim().isEmpty) {
+      return {
+        'success': false,
+        'message': 'User ID is required',
+        'data': {'posts': <dynamic>[]},
+      };
+    }
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/posts/user/$userId/commented'),
+      headers: await _headers(),
+    );
+
+    await _handleUnauthorized(response);
+    return _decode(response);
+  }
+
+
   static Future<Map<String, dynamic>> getMyCommentedPosts() async {
     try {
       final currentUser = await getCurrentUser();

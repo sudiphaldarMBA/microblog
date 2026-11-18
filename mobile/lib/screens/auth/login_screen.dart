@@ -169,52 +169,10 @@ class _LoginScreenState extends State<LoginScreen> {
   // ------------------------------------------------------------
 
   Future<void> _phoneLogin() async {
-    final phoneController = TextEditingController(text: '+91');
-
     final phoneNumber = await showDialog<String>(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Login with phone'),
-          content: TextField(
-            controller: phoneController,
-            keyboardType: TextInputType.phone,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Phone number',
-              hintText: '+919876543210',
-              helperText: 'Include your country code, e.g. +91',
-              prefixIcon: Icon(Icons.phone_outlined),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final phone = phoneController.text.trim();
-
-                if (!RegExp(r'^\+[1-9]\d{7,14}$').hasMatch(phone)) {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    const SnackBar(
-                      content: Text('Enter a valid number with country code.'),
-                    ),
-                  );
-                  return;
-                }
-
-                Navigator.pop(dialogContext, phone);
-              },
-              child: const Text('Send OTP'),
-            ),
-          ],
-        );
-      },
+      builder: (_) => const _PhoneNumberDialog(),
     );
-
-    phoneController.dispose();
 
     if (phoneNumber == null || !mounted) return;
 
@@ -268,59 +226,11 @@ class _LoginScreenState extends State<LoginScreen> {
     required String verificationId,
     required String phoneNumber,
   }) async {
-    final otpController = TextEditingController();
-
     final otp = await showDialog<String>(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Verify your phone'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Enter the verification code sent to $phoneNumber.'),
-              const SizedBox(height: 18),
-              TextField(
-                controller: otpController,
-                autofocus: true,
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                decoration: const InputDecoration(
-                  labelText: '6-digit OTP',
-                  prefixIcon: Icon(Icons.password_outlined),
-                  counterText: '',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final code = otpController.text.trim();
-
-                if (code.length != 6) {
-                  ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    const SnackBar(content: Text('Enter the 6-digit OTP.')),
-                  );
-                  return;
-                }
-
-                Navigator.pop(dialogContext, code);
-              },
-              child: const Text('Verify'),
-            ),
-          ],
-        );
-      },
+      builder: (_) => _OtpDialog(phoneNumber: phoneNumber),
     );
-
-    otpController.dispose();
 
     if (otp == null || !mounted) return;
 
@@ -422,98 +332,19 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // Profile dialog now owns its own controllers.
   Future<Map<String, String>?> _showProfileSetupDialog({
     required String suggestedName,
     required String suggestedEmail,
-  }) async {
-    final nameController = TextEditingController(text: suggestedName);
-
-    final suggestedUsername = suggestedEmail
-        .split('@')
-        .first
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9_]'), '');
-
-    final usernameController = TextEditingController(
-      text: suggestedUsername.length >= 3
-          ? suggestedUsername.substring(
-              0,
-              suggestedUsername.length > 30 ? 30 : suggestedUsername.length,
-            )
-          : '',
-    );
-
-    final formKey = GlobalKey<FormState>();
-
-    final result = await showDialog<Map<String, String>>(
+  }) {
+    return showDialog<Map<String, String>>(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Complete your profile'),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Just one more step before joining MicroBlog.'),
-                const SizedBox(height: 18),
-                TextFormField(
-                  controller: nameController,
-                  maxLength: 50,
-                  decoration: const InputDecoration(
-                    labelText: 'Display name',
-                    prefixIcon: Icon(Icons.person_outline),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().length < 3) {
-                      return 'Enter at least 3 characters.';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: usernameController,
-                  maxLength: 30,
-                  decoration: const InputDecoration(
-                    labelText: 'Username',
-                    prefixIcon: Icon(Icons.alternate_email),
-                  ),
-                  validator: (value) {
-                    final username = value?.trim() ?? '';
-
-                    if (!RegExp(r'^[a-zA-Z0-9_]{3,30}$').hasMatch(username)) {
-                      return 'Use 3–30 letters, numbers or _.';
-                    }
-
-                    return null;
-                  },
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () {
-                if (!formKey.currentState!.validate()) return;
-
-                Navigator.pop(dialogContext, {
-                  'displayName': nameController.text.trim(),
-                  'username': usernameController.text.trim(),
-                });
-              },
-              child: const Text('Continue'),
-            ),
-          ],
-        );
-      },
+      builder: (_) => _ProfileSetupDialog(
+        suggestedName: suggestedName,
+        suggestedEmail: suggestedEmail,
+      ),
     );
-
-    nameController.dispose();
-    usernameController.dispose();
-
-    return result;
   }
 
   // ------------------------------------------------------------
@@ -746,7 +577,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         Expanded(
                           child: _socialButton(
                             label: 'Google',
-                            icon: Icons.g_mobiledata_rounded,
+                            icon: Icons.account_circle_outlined,
                             isLoading:
                                 _isLoading && _activeProvider == 'google',
                             colors: colors,
@@ -903,6 +734,264 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
               ),
       ),
+    );
+  }
+}
+
+// ============================================================
+// PHONE NUMBER DIALOG
+// ============================================================
+
+class _PhoneNumberDialog extends StatefulWidget {
+  const _PhoneNumberDialog();
+
+  @override
+  State<_PhoneNumberDialog> createState() => _PhoneNumberDialogState();
+}
+
+class _PhoneNumberDialogState extends State<_PhoneNumberDialog> {
+  late final TextEditingController _phoneController;
+
+  @override
+  void initState() {
+    super.initState();
+    _phoneController = TextEditingController(text: '+91');
+  }
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final phone = _phoneController.text.trim();
+
+    if (!RegExp(r'^\+[1-9]\d{7,14}$').hasMatch(phone)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter a valid number with country code.'),
+        ),
+      );
+      return;
+    }
+
+    Navigator.of(context).pop(phone);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Login with phone'),
+      content: TextField(
+        controller: _phoneController,
+        keyboardType: TextInputType.phone,
+        autofocus: true,
+        decoration: const InputDecoration(
+          labelText: 'Phone number',
+          hintText: '+919876543210',
+          helperText: 'Include your country code, e.g. +91',
+          prefixIcon: Icon(Icons.phone_outlined),
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Send OTP')),
+      ],
+    );
+  }
+}
+
+// ============================================================
+// OTP VERIFICATION DIALOG
+// ============================================================
+
+class _OtpDialog extends StatefulWidget {
+  final String phoneNumber;
+
+  const _OtpDialog({required this.phoneNumber});
+
+  @override
+  State<_OtpDialog> createState() => _OtpDialogState();
+}
+
+class _OtpDialogState extends State<_OtpDialog> {
+  late final TextEditingController _otpController;
+
+  @override
+  void initState() {
+    super.initState();
+    _otpController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _otpController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final code = _otpController.text.trim();
+
+    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter the 6-digit OTP.')));
+      return;
+    }
+
+    Navigator.of(context).pop(code);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Verify your phone'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Enter the verification code sent to ${widget.phoneNumber}.'),
+          const SizedBox(height: 18),
+          TextField(
+            controller: _otpController,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            decoration: const InputDecoration(
+              labelText: '6-digit OTP',
+              prefixIcon: Icon(Icons.password_outlined),
+              counterText: '',
+            ),
+            onSubmitted: (_) => _submit(),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Verify')),
+      ],
+    );
+  }
+}
+
+// ============================================================
+// NEW FIREBASE ACCOUNT PROFILE SETUP DIALOG
+// ============================================================
+
+class _ProfileSetupDialog extends StatefulWidget {
+  final String suggestedName;
+  final String suggestedEmail;
+
+  const _ProfileSetupDialog({
+    required this.suggestedName,
+    required this.suggestedEmail,
+  });
+
+  @override
+  State<_ProfileSetupDialog> createState() => _ProfileSetupDialogState();
+}
+
+class _ProfileSetupDialogState extends State<_ProfileSetupDialog> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _usernameController;
+
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+
+    _nameController = TextEditingController(text: widget.suggestedName);
+
+    final suggestedUsername = widget.suggestedEmail
+        .split('@')
+        .first
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9_]'), '');
+
+    _usernameController = TextEditingController(
+      text: suggestedUsername.length >= 3
+          ? suggestedUsername.substring(
+              0,
+              suggestedUsername.length > 30 ? 30 : suggestedUsername.length,
+            )
+          : '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _usernameController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+
+    Navigator.of(context).pop({
+      'displayName': _nameController.text.trim(),
+      'username': _usernameController.text.trim(),
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Complete your profile'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Just one more step before joining MicroBlog.'),
+            const SizedBox(height: 18),
+            TextFormField(
+              controller: _nameController,
+              maxLength: 50,
+              decoration: const InputDecoration(
+                labelText: 'Display name',
+                prefixIcon: Icon(Icons.person_outline),
+              ),
+              validator: (value) {
+                if (value == null || value.trim().length < 3) {
+                  return 'Enter at least 3 characters.';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _usernameController,
+              maxLength: 30,
+              decoration: const InputDecoration(
+                labelText: 'Username',
+                prefixIcon: Icon(Icons.alternate_email),
+              ),
+              validator: (value) {
+                final username = value?.trim() ?? '';
+
+                if (!RegExp(r'^[a-zA-Z0-9_]{3,30}$').hasMatch(username)) {
+                  return 'Use 3–30 letters, numbers or _.';
+                }
+
+                return null;
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        FilledButton(onPressed: _submit, child: const Text('Continue')),
+      ],
     );
   }
 }
