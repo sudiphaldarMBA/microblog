@@ -1,7 +1,9 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 
 const User = require("../models/User");
+const Session = require("../models/Session");
 const { auth: firebaseAuth } = require("../config/firebaseAdmin");
 
 // ==========================================================
@@ -60,6 +62,52 @@ function buildUserResponse(user) {
 
     createdAt: user.createdAt,
   };
+}
+
+// ==========================================================
+// HELPER: CREATE AUTHENTICATION SESSION
+// ==========================================================
+
+async function createAuthSession(user, req) {
+  const sessionId = crypto.randomUUID();
+
+  const token = jwt.sign(
+    {
+      userId: user._id.toString(),
+      ...(user.email ? { email: user.email } : {}),
+      sid: sessionId,
+    },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+    }
+  );
+
+  const decoded = jwt.decode(token);
+
+  const userAgent = req.get("user-agent") || "";
+
+  let deviceType = "unknown";
+
+  if (/tablet|ipad/i.test(userAgent)) {
+    deviceType = "tablet";
+  } else if (/mobile|android|iphone/i.test(userAgent)) {
+    deviceType = "mobile";
+  } else if (/windows|macintosh|linux/i.test(userAgent)) {
+    deviceType = "desktop";
+  }
+
+  await Session.create({
+    sessionId,
+    user: user._id,
+    deviceName: req.get("x-device-name") || "Unknown device",
+    deviceType,
+    userAgent: userAgent.substring(0, 500),
+    lastActiveAt: new Date(),
+    expiresAt: new Date(decoded.exp * 1000),
+  });
+
+  return token;
 }
 
 // ==========================================================
@@ -361,18 +409,7 @@ exports.login = async (req, res) => {
     // CREATE JWT
     // --------------------------------------------------------
 
-    const token =
-      jwt.sign(
-        {
-          userId: user._id.toString(),
-          email: user.email,
-        },
-        process.env.JWT_SECRET,
-        {
-          expiresIn:
-            process.env.JWT_EXPIRES_IN || "7d",
-        }
-      );
+    const token = await createAuthSession(user, req);
 
     // --------------------------------------------------------
     // RESPONSE
@@ -661,16 +698,7 @@ exports.firebaseLogin = async (req, res) => {
     // CREATE MICROBLOG JWT
     // --------------------------------------------------------
 
-    const token = jwt.sign(
-      {
-        userId: user._id.toString(),
-        ...(user.email ? { email: user.email } : {}),
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: process.env.JWT_EXPIRES_IN || "7d",
-      }
-    );
+    const token = await createAuthSession(user, req);
 
     return res.status(201).json({
       success: true,
@@ -1112,3 +1140,139 @@ console.log(
     });
   }
 };
+
+
+ 
+// ==========================================================
+// GET ACTIVE LOGIN SESSIONS
+// ==========================================================
+
+exports.getSessions = async (req, res) => {
+  try {
+    const sessions = await Session.find({
+      user: req.userId,
+      revokedAt: null,
+      expiresAt: { $gt: new Date() },
+    })
+      .sort({ lastActiveAt: -1 })
+      .select(
+        "sessionId deviceName deviceType lastActiveAt createdAt expiresAt"
+      )
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        sessions: sessions.map((session) => ({
+          ...session,
+          isCurrent: session.sessionId === req.sessionId,
+        })),
+      },
+    });
+  } catch (error) {
+    console.error("Get Sessions Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to retrieve login sessions",
+    });
+  }
+};
+
+// ==========================================================
+// REVOKE ONE LOGIN SESSION
+// ==========================================================
+
+exports.revokeSession = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    if (!sessionId) {
+      return res.status(400).json({
+        success: false,
+        message: "Session ID is required",
+      });
+    }
+
+    const session = await Session.findOneAndUpdate(
+      {
+        sessionId,
+        user: req.userId,
+        revokedAt: null,
+      },
+      {
+        $set: {
+          revokedAt: new Date(),
+        },
+      },
+      {
+        new: true,
+      }
+    );
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: "Active session not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Login session revoked successfully",
+    });
+  } catch (error) {
+    console.error("Revoke Session Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to revoke login session",
+    });
+  }
+};
+
+// ==========================================================
+// LOG OUT OF ALL OTHER DEVICES
+// ==========================================================
+
+exports.revokeOtherSessions = async (req, res) => {
+  try {
+    if (!req.sessionId) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "Please sign in again before managing your other sessions",
+        code: "SESSION_ID_REQUIRED",
+      });
+    }
+
+    const result = await Session.updateMany(
+      {
+        user: req.userId,
+        sessionId: { $ne: req.sessionId },
+        revokedAt: null,
+      },
+      {
+        $set: {
+          revokedAt: new Date(),
+        },
+      }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Other login sessions revoked successfully",
+      data: {
+        revokedCount: result.modifiedCount,
+      },
+    });
+  } catch (error) {
+    console.error("Revoke Other Sessions Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to revoke other login sessions",
+    });
+  }
+};
+

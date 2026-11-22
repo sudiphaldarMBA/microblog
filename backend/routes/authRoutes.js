@@ -39,6 +39,30 @@ router.get(
   authController.getMe
 );
 
+
+// ==========================================
+// DEVICE SESSION MANAGEMENT
+// ==========================================
+
+router.get(
+  "/sessions",
+  authMiddleware,
+  authController.getSessions
+);
+
+router.delete(
+  "/sessions/:sessionId",
+  authMiddleware,
+  authController.revokeSession
+);
+
+router.delete(
+  "/sessions",
+  authMiddleware,
+  authController.revokeOtherSessions
+);
+
+
 // ==========================================
 // UPDATE USER PROFILE
 // ==========================================

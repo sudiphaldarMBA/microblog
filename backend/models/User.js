@@ -152,6 +152,43 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
 
+
+    // ==========================================
+    // ACCOUNT STATUS
+    // ==========================================
+
+    accountStatus: {
+      type: String,
+      enum: ["active", "deactivated", "deletion_pending"],
+      default: "active",
+      index: true,
+    },
+
+    deactivatedAt: {
+      type: Date,
+      default: null,
+    },
+
+    // ==========================================
+    // ACCOUNT DELETION
+    // ==========================================
+
+    deletionRequestedAt: {
+      type: Date,
+      default: null,
+    },
+
+    // ==========================================
+    // APP LANGUAGE
+    // ==========================================
+
+    language: {
+      type: String,
+      default: "en",
+      trim: true,
+    },
+  
+
     // ==========================================
     // FOLLOWERS
     // ==========================================
