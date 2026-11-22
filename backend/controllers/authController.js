@@ -85,10 +85,27 @@ async function createAuthSession(user, req) {
 
   const decoded = jwt.decode(token);
 
-  const userAgent = req.get("user-agent") || "";
+  
+const userAgent = req.get("user-agent") || "";
 
-  let deviceType = "unknown";
+const requestedDeviceType = (
+  req.get("x-device-type") || ""
+).toLowerCase();
 
+const allowedDeviceTypes = [
+  "mobile",
+  "tablet",
+  "desktop",
+  "web",
+  "unknown",
+];
+
+let deviceType = allowedDeviceTypes.includes(requestedDeviceType)
+  ? requestedDeviceType
+  : "unknown";
+
+// Fallback to user-agent detection when no valid device type is supplied.
+if (deviceType === "unknown") {
   if (/tablet|ipad/i.test(userAgent)) {
     deviceType = "tablet";
   } else if (/mobile|android|iphone/i.test(userAgent)) {
@@ -96,6 +113,8 @@ async function createAuthSession(user, req) {
   } else if (/windows|macintosh|linux/i.test(userAgent)) {
     deviceType = "desktop";
   }
+}
+
 
   await Session.create({
     sessionId,
