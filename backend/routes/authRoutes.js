@@ -62,6 +62,14 @@ router.delete(
   authController.revokeOtherSessions
 );
 
+// ==========================================
+// CHANGE PASSWORD
+// ==========================================
+router.put(
+  "/change-password",
+  authMiddleware,
+  authController.changePassword
+);
 
 // ==========================================
 // UPDATE USER PROFILE
