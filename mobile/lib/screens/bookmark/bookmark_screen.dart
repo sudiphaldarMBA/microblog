@@ -5,6 +5,8 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../services/api_service.dart';
 import '../home/home_video_player.dart';
+import '../profile/profile_screen.dart';
+import '../profile/user_profile_screen.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
@@ -64,10 +66,35 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
   // INIT
   // ============================================================
 
+  String _myId = '';
+
   @override
   void initState() {
     super.initState();
+    _loadMe();
     _loadSavedPosts();
+  }
+
+  Future<void> _loadMe() async {
+    try {
+      final me = await ApiService.getCurrentUser();
+      _myId = (me['_id'] ?? me['id'] ?? '').toString();
+    } catch (_) {}
+  }
+
+  // Opens the profile of whoever wrote the post (your own -> My profile).
+  Future<void> _openAuthorProfile(Map<String, dynamic> author) async {
+    final authorId = (author['_id'] ?? author['id'] ?? '').toString();
+
+    if (authorId.isEmpty) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => authorId == _myId
+            ? const ProfileScreen()
+            : UserProfileScreen(userId: authorId, initialUser: author),
+      ),
+    );
   }
 
   // ============================================================
@@ -1012,10 +1039,14 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _avatar(
-                    image: author["avatar"],
-                    name: displayName,
-                    radius: 21,
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _openAuthorProfile(author),
+                    child: _avatar(
+                      image: author["avatar"],
+                      name: displayName,
+                      radius: 21,
+                    ),
                   ),
 
                   const SizedBox(width: 11),
@@ -1031,7 +1062,10 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
-                              child: Column(
+                              child: GestureDetector(
+                               behavior: HitTestBehavior.opaque,
+                               onTap: () => _openAuthorProfile(author),
+                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
@@ -1041,7 +1075,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                                     style: TextStyle(
                                       color: _text,
                                       fontSize: 15.5,
-                                      fontWeight: FontWeight.w700,
+                                      fontWeight: FontWeight.w800,
                                     ),
                                   ),
 
@@ -1084,6 +1118,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                                     ],
                                   ),
                                 ],
+                              ),
                               ),
                             ),
 
@@ -1149,65 +1184,73 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                         // ------------------------------------------------
                         if (poll != null) _buildPollPreview(poll, postId),
 
-                        const SizedBox(height: 13),
+                        const SizedBox(height: 8),
 
                         // ------------------------------------------------
-                        // ACTION BAR
+                        // VIEW COUNT (same as Home)
+                        // ------------------------------------------------
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: Text(
+                              "${_formatCount(viewsCount)} views",
+                              style: TextStyle(
+                                color: _secondary,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 2),
+
+                        // ------------------------------------------------
+                        // ACTION BAR (same as Home)
                         // ------------------------------------------------
                         Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Expanded(
-                              child: _actionButton(
-                                icon: isLiked
-                                    ? CupertinoIcons.heart_fill
-                                    : CupertinoIcons.heart,
-                                count: likeCount,
-                                color: isLiked ? _red : _secondary,
-                                loading: isLiking,
-                                onTap: postId.isEmpty
-                                    ? null
-                                    : () => _toggleLike(postId),
-                              ),
+                            _actionButton(
+                              icon: isLiked
+                                  ? CupertinoIcons.heart_fill
+                                  : CupertinoIcons.heart,
+                              count: likeCount,
+                              color: isLiked ? _red : _secondary,
+                              active: isLiked,
+                              loading: isLiking,
+                              onTap: postId.isEmpty
+                                  ? null
+                                  : () => _toggleLike(postId),
                             ),
 
-                            Expanded(
-                              child: _actionButton(
-                                icon: CupertinoIcons.bubble_left,
-                                count: commentCount,
-                                color: _secondary,
-                                onTap: postId.isEmpty
-                                    ? null
-                                    : () => _openComments(postId),
-                              ),
+                            _actionButton(
+                              icon: CupertinoIcons.bubble_left,
+                              count: commentCount,
+                              color: _secondary,
+                              onTap: postId.isEmpty
+                                  ? null
+                                  : () => _openComments(postId),
                             ),
 
-                            Expanded(
-                              child: _actionButton(
-                                icon: CupertinoIcons.arrowshape_turn_up_right,
-                                count: 0,
-                                color: _secondary,
-                                onTap: () => _sharePost(post),
-                              ),
+                            _actionButton(
+                              icon: CupertinoIcons.arrowshape_turn_up_right,
+                              count: 0,
+                              color: _secondary,
+                              showCount: false,
+                              onTap: () => _sharePost(post),
                             ),
 
-                            Expanded(
-                              child: _actionButton(
-                                icon: CupertinoIcons.bookmark_fill,
-                                count: 0,
-                                color: _blue,
-                                onTap: postId.isEmpty
-                                    ? null
-                                    : () => _removeBookmark(postId),
-                                showCount: false,
-                              ),
-                            ),
-                            Expanded(
-                              child: _actionButton(
-                                icon: CupertinoIcons.eye,
-                                count: viewsCount,
-                                color: _secondary,
-                                onTap: null,
-                              ),
+                            _actionButton(
+                              icon: CupertinoIcons.bookmark_fill,
+                              count: 0,
+                              color: _red,
+                              active: true,
+                              showCount: false,
+                              onTap: postId.isEmpty
+                                  ? null
+                                  : () => _removeBookmark(postId),
                             ),
                           ],
                         ),
@@ -1305,49 +1348,81 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     required int count,
     required Color color,
     required VoidCallback? onTap,
+    bool active = false,
     bool loading = false,
     bool showCount = true,
   }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
-        splashColor: color.withValues(alpha: 0.15),
-        highlightColor: color.withValues(alpha: 0.08),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 2),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              loading
-                  ? SizedBox(
-                      width: 19,
-                      height: 19,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: color,
-                      ),
-                    )
-                  : Icon(icon, size: 21, color: color),
-
-              if (showCount) ...[
-                const SizedBox(width: 5),
-
-                Text(
-                  count.toString(),
-                  style: TextStyle(
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            loading
+                ? SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: color,
+                    ),
+                  )
+                : Icon(
+                    icon,
+                    size: 21,
                     color: color,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
+                    // Cupertino outline glyphs are thin; two hairline
+                    // shadows make them a touch bolder (same as Home).
+                    shadows: [
+                      Shadow(color: color, offset: const Offset(.45, 0)),
+                      Shadow(color: color, offset: const Offset(-.45, 0)),
+                    ],
                   ),
+            if (showCount && count > 0) ...[
+              const SizedBox(width: 5),
+              Text(
+                _formatCount(count),
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12.5,
+                  fontWeight: active ? FontWeight.w800 : FontWeight.w600,
                 ),
-              ],
+              ),
             ],
-          ),
+          ],
         ),
       ),
     );
+  }
+
+  String _formatCount(int value) {
+    if (value < 1000) {
+      return value < 0 ? '0' : value.toString();
+    }
+
+    if (value > 10000000) {
+      return '10M+';
+    }
+
+    if (value >= 10000000) {
+      return '10M';
+    }
+
+    if (value < 1000000) {
+      final number = value / 1000;
+
+      if (number >= 100) {
+        return '${number.toStringAsFixed(0)}K';
+      }
+
+      return '${number.toStringAsFixed(number == number.roundToDouble() ? 0 : 1)}K';
+    }
+
+    final number = value / 1000000;
+
+    return '${number.toStringAsFixed(number == number.roundToDouble() ? 0 : 1)}M';
   }
 
   // ============================================================

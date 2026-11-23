@@ -31,6 +31,38 @@ router.post(
 );
 
 // ==========================================
+// FORGOT PASSWORD / EMAIL OTP
+// ==========================================
+
+router.post(
+  "/forgot-password",
+  authController.requestPasswordReset
+);
+
+router.post(
+  "/verify-reset-otp",
+  authController.verifyPasswordResetOtp
+);
+
+// ==========================================
+// PHONE PASSWORD RECOVERY
+// ==========================================
+
+router.post(
+  "/verify-reset-phone",
+  authController.verifyPasswordResetPhone
+);
+
+// ==========================================
+// RESET PASSWORD
+// ==========================================
+
+router.post(
+  "/reset-password",
+  authController.resetPassword
+);
+
+// ==========================================
 // GET LOGGED-IN USER
 // ==========================================
 router.get(

@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/api_service.dart';
+import '../../widgets/comments_sheet.dart';
 import 'package:share_plus/share_plus.dart';
 import '../home/home_video_player.dart';
+import 'follow_list_screen.dart';
 
 /// Public profile of another user: cover, photo, details, Follow button
 /// and that person's posts.
@@ -43,6 +45,11 @@ int _selectedTabIndex = 0;
 List<Map<String, dynamic>> _commentedPosts = [];
 
 bool _loadingCommentedPosts = true;
+
+// Videos posted from the Shorts screen.
+List<Map<String, dynamic>> _shortPosts = [];
+
+bool _loadingShorts = true;
 
 List<Map<String, dynamic>> get _profilePosts {
   return _posts.where((post) {
@@ -82,6 +89,8 @@ List<Map<String, dynamic>> get _visiblePosts {
       return _profileLikes;
     case 3:
       return _commentedPosts;
+    case 4:
+      return _shortPosts;
     default:
       return _profilePosts;
   }
@@ -158,180 +167,32 @@ Future<void> _openPostComments(Map<String, dynamic> post) async {
   final postId = _postId(post);
   if (postId.isEmpty) return;
 
-  final result = await ApiService.getComments(postId: postId);
-
-  if (!mounted) return;
-
-  if (result['success'] != true) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(result['message'] ?? 'Unable to load comments'),
-      ),
-    );
-    return;
-  }
-
-  final rawComments = result['data']?['comments'];
-  final comments = rawComments is List
-      ? rawComments.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
-      : <Map<String, dynamic>>[];
-
-  final controller = TextEditingController();
+  int? latestCount;
 
   await showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: _surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
     builder: (sheetContext) {
-      bool sending = false;
-
-      return StatefulBuilder(
-        builder: (context, setSheetState) {
-          Future<void> sendComment() async {
-            final text = controller.text.trim();
-            if (text.isEmpty || sending) return;
-
-            setSheetState(() => sending = true);
-
-            try {
-              final response = await ApiService.createComment(
-                postId: postId,
-                content: text,
-              );
-
-              if (response['success'] != true) {
-                throw Exception(response['message'] ?? 'Unable to comment');
-              }
-
-              final created = response['data']?['comment'];
-              if (created is Map) {
-                setSheetState(() {
-                  comments.add(Map<String, dynamic>.from(created));
-                });
-              }
-
-              controller.clear();
-
-              final currentCount = _num(post['commentsCount']);
-              if (mounted) {
-                setState(() {
-                  post['commentsCount'] = currentCount + 1;
-                });
-              }
-            } catch (error) {
-              if (sheetContext.mounted) {
-                ScaffoldMessenger.of(sheetContext).showSnackBar(
-                  SnackBar(content: Text(error.toString())),
-                );
-              }
-            } finally {
-              if (sheetContext.mounted) {
-                setSheetState(() => sending = false);
-              }
-            }
-          }
-
-          return Padding(
-            padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              top: 18,
-              bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
-            ),
-            child: SizedBox(
-              height: MediaQuery.of(sheetContext).size.height * .65,
-              child: Column(
-                children: [
-                  Text(
-                    'Comments',
-                    style: TextStyle(
-                      color: _text,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Expanded(
-                    child: comments.isEmpty
-                        ? Center(
-                            child: Text(
-                              'No comments yet',
-                              style: TextStyle(color: _muted),
-                            ),
-                          )
-                        : ListView.builder(
-                            itemCount: comments.length,
-                            itemBuilder: (context, index) {
-                              final comment = comments[index];
-                              final author = comment['author'];
-                              final name = author is Map
-                                  ? (author['displayName'] ??
-                                          author['username'] ??
-                                          'User')
-                                      .toString()
-                                  : 'User';
-
-                              return ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(
-                                  name,
-                                  style: TextStyle(
-                                    color: _text,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  (comment['content'] ?? '').toString(),
-                                  style: TextStyle(color: _muted),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: controller,
-                          style: TextStyle(color: _text),
-                          decoration: InputDecoration(
-                            hintText: 'Write a comment...',
-                            hintStyle: TextStyle(color: _muted),
-                            filled: true,
-                            fillColor: _background,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: sending ? null : sendComment,
-                        icon: sending
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(CupertinoIcons.paperplane_fill),
-                        color: _accent,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
+      return SizedBox(
+        height: MediaQuery.of(sheetContext).size.height * 0.85,
+        child: CommentsSheet(
+          postId: postId,
+          onCountChanged: (count) => latestCount = count,
+        ),
       );
     },
   );
 
-  controller.dispose();
+  if (!mounted) return;
+
+  final newCount = latestCount;
+  if (newCount != null) {
+    setState(() {
+      post['commentsCount'] = newCount;
+    });
+  }
 }
 
 Future<void> _repostProfilePost(Map<String, dynamic> post) async {
@@ -429,31 +290,67 @@ Future<void> _shareProfilePost(Map<String, dynamic> post) async {
 }
 
   // ============================================================
-  // COLORS
+  // COLORS (same palette as the home / my profile screens)
   // ============================================================
 
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
 
   Color get _background =>
-      _isDark ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
+      _isDark ? const Color(0xFF08090B) : const Color(0xFFF7F8FA);
 
   Color get _surface =>
-      _isDark ? const Color(0xFF0A0A0A) : const Color(0xFFFFFFFF);
+      _isDark ? const Color(0xFF15171B) : const Color(0xFFFFFFFF);
 
   Color get _secondarySurface =>
-      _isDark ? const Color(0xFF16181C) : const Color(0xFFF3F4F6);
+      _isDark ? const Color(0xFF202329) : const Color(0xFFF0F1F4);
 
   Color get _text =>
-      _isDark ? const Color(0xFFF5F5F5) : const Color(0xFF111111);
+      _isDark ? const Color(0xFFFFFFFF) : const Color(0xFF111318);
 
   Color get _muted =>
-      _isDark ? const Color(0xFF71767B) : const Color(0xFF687078);
+      _isDark ? const Color(0xFF9297A0) : const Color(0xFF737B86);
 
   Color get _divider =>
-      _isDark ? const Color(0xFF2F3336) : const Color(0xFFE5E7EB);
+      _isDark ? const Color(0xFF282B31) : const Color(0xFFE6E8EC);
 
   static const Color _accent = Color(0xFFF91880);
-static const Color _linkColor = Color(0xFF2563EB);
+  static const Color _linkColor = Color(0xFF2563EB);
+
+  Widget _boldIcon(IconData icon, double size, Color color) {
+    return Icon(
+      icon,
+      size: size,
+      color: color,
+      shadows: [
+        Shadow(color: color, offset: const Offset(.45, 0)),
+        Shadow(color: color, offset: const Offset(-.45, 0)),
+      ],
+    );
+  }
+
+  String _formatCount(int value) {
+    if (value < 1000) {
+      return value < 0 ? '0' : value.toString();
+    }
+
+    if (value > 10000000) {
+      return '10M+';
+    }
+
+    if (value >= 10000000) {
+      return '10M';
+    }
+
+    if (value >= 1000000) {
+      final number = value / 1000000;
+
+      return '${number.toStringAsFixed(number == number.roundToDouble() ? 0 : 1)}M';
+    }
+
+    final number = value / 1000;
+
+    return '${number.toStringAsFixed(number >= 100 || number == number.roundToDouble() ? 0 : 1)}K';
+  }
 
   // ============================================================
   // LIFECYCLE
@@ -484,6 +381,7 @@ Future<void> _load() async {
   _loadProfile(),
   _loadPosts(),
   _loadCommentedPosts(),
+  _loadShortPosts(),
 ]);
 }
 
@@ -588,6 +486,37 @@ Future<void> _loadPosts() async {
   }
 }
 
+
+Future<void> _loadShortPosts() async {
+  try {
+    final result = await ApiService.getShorts(userId: widget.userId);
+
+    if (!mounted) return;
+
+    final raw = result['data']?['posts'];
+
+    final posts = result['success'] == true && raw is List
+        ? raw
+            .whereType<Map>()
+            .map((post) => Map<String, dynamic>.from(post))
+            .toList()
+        : <Map<String, dynamic>>[];
+
+    setState(() {
+      _shortPosts = posts;
+      _loadingShorts = false;
+    });
+  } catch (error) {
+    debugPrint('Load user shorts error: $error');
+
+    if (!mounted) return;
+
+    setState(() {
+      _shortPosts = [];
+      _loadingShorts = false;
+    });
+  }
+}
 
 Future<void> _loadCommentedPosts() async {
   if (!mounted) return;
@@ -915,7 +844,7 @@ Future<void> _loadCommentedPosts() async {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 18, color: _text.withOpacity(.78)),
+        _boldIcon(icon, 17, _muted),
         const SizedBox(width: 6),
         Flexible(
           child: Text(
@@ -925,7 +854,7 @@ Future<void> _loadCommentedPosts() async {
             style: TextStyle(
               color: _muted,
               fontSize: 13.5,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -933,28 +862,46 @@ Future<void> _loadCommentedPosts() async {
     );
   }
 
-  Widget _count(int count, String label) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          '$count',
-          style: TextStyle(
-            color: _text,
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-          ),
+  Widget _count(int count, String label, VoidCallback onTap) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _formatCount(count),
+              style: TextStyle(
+                color: _text,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                color: _muted,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: TextStyle(
-  color: _muted,
-  fontSize: 14,
-  fontWeight: FontWeight.w700,
-),
+      ),
+    );
+  }
+
+  void _openConnections({required bool followers}) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => FollowListScreen(
+          userId: widget.userId,
+          followers: followers,
         ),
-      ],
+      ),
     );
   }
 
@@ -967,12 +914,34 @@ Future<void> _loadCommentedPosts() async {
         width: double.infinity,
         height: 170,
         child: provider == null
-            ? Container(color: _secondarySurface)
+            ? Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      _accent.withOpacity(_isDark ? .30 : .18),
+                      _secondarySurface,
+                    ],
+                  ),
+                ),
+              )
             : Image(
                 image: provider,
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) =>
-                    Container(color: _secondarySurface),
+                    Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      _accent.withOpacity(_isDark ? .30 : .18),
+                      _secondarySurface,
+                    ],
+                  ),
+                ),
+              ),
               ),
       ),
     );
@@ -981,33 +950,33 @@ Future<void> _loadCommentedPosts() async {
   Widget _followButton() {
     final following = _isFollowing;
 
-    final bg = following
-        ? Colors.transparent
-        : (_isDark ? Colors.white : Colors.black);
-
-    final fg = following ? _text : (_isDark ? Colors.black : Colors.white);
-
     return SizedBox(
-      height: 38,
+      height: 34,
       child: ElevatedButton(
         onPressed: _followBusy ? null : _toggleFollow,
         style: ElevatedButton.styleFrom(
           elevation: 0,
-          backgroundColor: bg,
-          foregroundColor: fg,
-          disabledBackgroundColor: bg,
-          disabledForegroundColor: fg.withOpacity(.6),
-          padding: const EdgeInsets.symmetric(horizontal: 22),
+          backgroundColor: following ? Colors.transparent : _text,
+          foregroundColor: following
+              ? _text
+              : (_isDark ? Colors.black : Colors.white),
+          disabledBackgroundColor: following ? Colors.transparent : _text,
+          disabledForegroundColor: (following
+                  ? _text
+                  : (_isDark ? Colors.black : Colors.white))
+              .withOpacity(.6),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(20),
             side: BorderSide(
               color: following ? _divider : Colors.transparent,
+              width: 1.4,
             ),
           ),
         ),
         child: Text(
           following ? 'Following' : 'Follow',
-          style: const TextStyle(fontWeight: FontWeight.w800),
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
         ),
       ),
     );
@@ -1018,148 +987,147 @@ Future<void> _loadCommentedPosts() async {
     final location = _field('location');
     final website = _field('website');
 
-    // The cover sits behind; the content starts 126px down so the
-    // avatar overlaps the cover's bottom edge. A Stack (instead of a
-    // transform) keeps taps on the overlapping part working.
-    return Stack(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 170,
-          child: _cover(),
+        // Cover photo with the profile photo overlapping its bottom edge.
+        SizedBox(
+          height: 170 + 48,
+          child: Stack(
+            children: [
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                height: 170,
+                child: _cover(),
+              ),
+              Positioned(
+                left: 16,
+                top: 170 - 44,
+                child: GestureDetector(
+                  onTap: () => _openPhoto(_user?['avatar']),
+                  child: Container(
+                    width: 92,
+                    height: 92,
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: _background,
+                      shape: BoxShape.circle,
+                    ),
+                    child: _avatar(_user?['avatar'], _displayName, 84),
+                  ),
+                ),
+              ),
+              if (!_isMe && _user != null)
+                Positioned(right: 16, top: 170 + 8, child: _followButton()),
+            ],
+          ),
         ),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 126),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    GestureDetector(
-                      onTap: () => _openPhoto(_user?['avatar']),
-                      child: Container(
-                        width: 94,
-                        height: 94,
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: _background,
-                          shape: BoxShape.circle,
-                        ),
-                        child: _avatar(_user?['avatar'], _displayName, 86),
+
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 6),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Flexible(
+                    child: Text(
+                      _displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _text,
+                        fontSize: 21,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -.4,
                       ),
                     ),
-                    const Spacer(),
-                    if (!_isMe && _user != null) _followButton(),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
+                  ),
+                  const SizedBox(width: 8),
+                  if (_username.isNotEmpty)
                     Flexible(
                       child: Text(
-                        _displayName,
+                        '@$_username',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: _text,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.5,
+                          color: _muted,
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    if (_username.isNotEmpty)
+                ],
+              ),
+              if (bio.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  bio,
+                  style: TextStyle(color: _text, fontSize: 15, height: 1.4),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 16,
+                runSpacing: 8,
+                children: [
+                  if (location.isNotEmpty)
+                    _meta(CupertinoIcons.location_solid, location),
+                  if (_dobText.isNotEmpty) _meta(Icons.cake_rounded, _dobText),
+                  if (_joinedText.isNotEmpty)
+                    _meta(Icons.calendar_month_rounded, _joinedText),
+                ],
+              ),
+              if (website.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _openWebsite,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _boldIcon(Icons.link_rounded, 18, _linkColor),
+                      const SizedBox(width: 6),
                       Flexible(
                         child: Text(
-                          '@$_username',
+                          website,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: _muted, fontSize: 14),
-                        ),
-                      ),
-                  ],
-                ),
-                if (bio.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    bio,
-                    style: TextStyle(
-                      color: _text,
-                      fontSize: 15,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-                if (location.isNotEmpty || _dobText.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 16,
-                    runSpacing: 7,
-                    children: [
-                      if (location.isNotEmpty)
-                        _meta(CupertinoIcons.location_solid, location),
-                      if (_dobText.isNotEmpty)
-                        _meta(Icons.cake_rounded, _dobText),
-                    ],
-                  ),
-                ],
-                if (_joinedText.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  _meta(Icons.calendar_month_rounded, _joinedText),
-                ],
-                if (website.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _openWebsite,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.link_rounded,
-                          size: 18,
-                          color: _linkColor,
-                        ),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            website,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: _accent,
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          style: const TextStyle(
+                            color: _linkColor,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  _count(
+                    _followingCount,
+                    'Following',
+                    () => _openConnections(followers: false),
+                  ),
+                  const SizedBox(width: 18),
+                  _count(
+                    _followersCount,
+                    'Followers',
+                    () => _openConnections(followers: true),
                   ),
                 ],
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    _count(_followingCount, 'Following'),
-                    const SizedBox(width: 20),
-                    _count(_followersCount, 'Followers'),
-                  ],
-                ),
-                const SizedBox(height: 16),
-               ],
               ),
-            ),
-          ],
+              const SizedBox(height: 14),
+            ],
+          ),
         ),
       ],
     );
@@ -1169,397 +1137,437 @@ Future<void> _loadCommentedPosts() async {
   // POSTS
   // ============================================================
 
-  Widget _postImage(dynamic value) {
+  int _num(dynamic value) => value is num ? value.toInt() : 0;
+
+  List<String> _mediaList(dynamic list, dynamic single) {
+    final items = <String>[];
+
+    if (list is List) {
+      for (final item in list) {
+        final value = item?.toString().trim() ?? '';
+
+        if (value.isNotEmpty) items.add(value);
+      }
+    }
+
+    if (items.isEmpty) {
+      final value = single?.toString().trim() ?? '';
+
+      if (value.isNotEmpty) items.add(value);
+    }
+
+    return items;
+  }
+
+  Widget _buildPostImage(String value, {double height = 260}) {
     final provider = _provider(value);
 
-    if (provider == null) return const SizedBox.shrink();
+    if (provider == null) {
+      return Container(
+        height: 180,
+        width: double.infinity,
+        color: _secondarySurface,
+        child: Icon(CupertinoIcons.photo, color: _muted, size: 32),
+      );
+    }
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: Image(
-          image: provider,
-          width: double.infinity,
-          height: 240,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-        ),
+    return Image(
+      image: provider,
+      width: double.infinity,
+      height: height,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => Container(
+        height: 180,
+        width: double.infinity,
+        color: _secondarySurface,
+        child: Icon(CupertinoIcons.photo, color: _muted, size: 32),
       ),
     );
   }
 
-  Widget _statItem(IconData icon, int count) {
+  Widget _buildMedia(Map<String, dynamic> source, {double imageHeight = 260}) {
+    final images = _mediaList(
+      source['images'],
+      source['image'] ?? source['imageUrl'] ?? source['mediaUrl'],
+    );
+
+    final videos = _mediaList(
+      source['videos'],
+      source['video'] ?? source['videoUrl'],
+    );
+
+    if (images.isEmpty && videos.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final maxVideoHeight = MediaQuery.of(context).size.height * .6;
+
+    Widget videoPlayer(String data) {
+      return ClipRect(
+        child: OverflowBox(
+          minHeight: 0,
+          maxHeight: double.infinity,
+          alignment: Alignment.center,
+          child: HomeVideoPlayer(videoData: data),
+        ),
+      );
+    }
+
     return Padding(
-      padding: const EdgeInsets.only(right: 22),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
         children: [
-          Icon(icon, size: 18, color: _muted),
-          const SizedBox(width: 5),
-          Text('$count', style: TextStyle(color: _muted, fontSize: 13)),
+          if (images.isNotEmpty)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: images.length > 1
+                  ? _MediaPager(
+                      height: imageHeight + 40,
+                      children: [
+                        for (final item in images)
+                          _buildPostImage(item, height: imageHeight + 40),
+                      ],
+                    )
+                  : _buildPostImage(images.first, height: imageHeight),
+            ),
+          if (videos.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(top: images.isNotEmpty ? 10 : 0),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  color: Colors.black,
+                  child: videos.length > 1
+                      ? _MediaPager(
+                          height: maxVideoHeight,
+                          children: [
+                            for (final item in videos)
+                              Center(child: videoPlayer(item)),
+                          ],
+                        )
+                      : ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: maxVideoHeight,
+                          ),
+                          child: videoPlayer(videos.first),
+                        ),
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  int _num(dynamic value) => value is num ? value.toInt() : 0;
+  Widget _postCard(Map<String, dynamic> post) {
+    final repostOf = post['repostOf'] is Map
+        ? Map<String, dynamic>.from(post['repostOf'])
+        : null;
 
-  List<String> _mediaList(dynamic list, dynamic single) {
-  final items = <String>[];
+    final isRepost = repostOf != null;
 
-  if (list is List) {
-    for (final item in list) {
-      final value = item?.toString().trim() ?? '';
-      if (value.isNotEmpty) items.add(value);
-    }
-  }
+    final author = post['author'];
 
-  if (items.isEmpty) {
-    final value = single?.toString().trim() ?? '';
-    if (value.isNotEmpty) items.add(value);
-  }
+    final authorMap = author is Map
+        ? Map<String, dynamic>.from(author)
+        : <String, dynamic>{};
 
-  return items;
-}
+    final content = (post['content'] ?? '').toString();
 
-Widget _buildMedia(Map<String, dynamic> source) {
-  final images = _mediaList(
-    source['images'],
-    source['image'] ?? source['imageUrl'] ?? source['mediaUrl'],
-  );
+    final likeCount = post['likesCount'] is num
+        ? _num(post['likesCount'])
+        : (post['likes'] is List ? (post['likes'] as List).length : 0);
 
-  final videos = _mediaList(
-    source['videos'],
-    source['video'] ?? source['videoUrl'],
-  );
+    final displayName =
+        (authorMap['displayName'] ?? authorMap['username'] ?? _displayName)
+            .toString();
 
-  if (images.isEmpty && videos.isEmpty) {
-    return const SizedBox.shrink();
-  }
+    final username = (authorMap['username'] ?? _username).toString();
 
-  final maxVideoHeight = MediaQuery.of(context).size.height * .6;
+    final liked = post['likedByMe'] == true;
 
-  Widget videoPlayer(String data) {
-    return ClipRect(
-      child: OverflowBox(
-        minHeight: 0,
-        maxHeight: double.infinity,
-        alignment: Alignment.center,
-        child: HomeVideoPlayer(videoData: data),
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _divider, width: .6),
       ),
-    );
-  }
-
-  return Padding(
-    padding: const EdgeInsets.only(top: 10),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final image in images) _postImage(image),
-
-        for (final video in videos)
-          Padding(
-            padding: EdgeInsets.only(top: images.isNotEmpty ? 10 : 0),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                color: Colors.black,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: maxVideoHeight,
-                  ),
-                  child: videoPlayer(video),
-                ),
-              ),
-            ),
-          ),
-      ],
-    ),
-  );
-}
-
-  
-Widget _postCard(Map<String, dynamic> post) {
-  final repostOf = post['repostOf'] is Map
-      ? Map<String, dynamic>.from(post['repostOf'])
-      : null;
-
-  final isRepost = repostOf != null;
-  final originalAuthor = repostOf?['author'];
-
-  final author = post['author'];
-  final authorMap = author is Map
-      ? Map<String, dynamic>.from(author)
-      : <String, dynamic>{};
-
-  final originalAuthorMap = originalAuthor is Map
-      ? Map<String, dynamic>.from(originalAuthor)
-      : <String, dynamic>{};
-
-  final content = (post['content'] ?? '').toString();
-
-  final likeCount = post['likesCount'] is num
-      ? _num(post['likesCount'])
-      : (post['likes'] is List ? (post['likes'] as List).length : 0);
-
-  final displayName = (authorMap['displayName'] ??
-          authorMap['username'] ??
-          _displayName)
-      .toString();
-
-  final username = (authorMap['username'] ?? _username).toString();
-
-  final originalName = (originalAuthorMap['displayName'] ??
-          originalAuthorMap['username'] ??
-          'Original author')
-      .toString();
-
-  final originalUsername =
-      (originalAuthorMap['username'] ?? '').toString();
-
-  final liked = post['likedByMe'] == true;
-
-  return Container(
-    width: double.infinity,
-    padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-    decoration: BoxDecoration(
-      color: _surface,
-      border: Border(bottom: BorderSide(color: _divider)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (isRepost)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                Icon(
-                  CupertinoIcons.arrow_2_squarepath,
-                  size: 15,
-                  color: _muted,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Reposted by $displayName',
-                  style: TextStyle(
-                    color: _muted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _avatar(authorMap['avatar'], displayName, 40),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (isRepost)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
                 children: [
+                  _boldIcon(CupertinoIcons.arrow_2_squarepath, 15, _muted),
+                  const SizedBox(width: 6),
                   Text(
-                    displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    'Reposted',
                     style: TextStyle(
-                      color: _text,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
+                      color: _muted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          '@$username',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: _muted, fontSize: 13),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                       Text(
-                       _timeAgo(post['createdAt']),
-                       style: TextStyle(color: _muted, fontSize: 12.5),
-                      ),
-                    ],
-                  ),
-                  if (content.trim().isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      content,
-                      style: TextStyle(
-                        color: _text,
-                        fontSize: 15.5,
-                        height: 1.42,
-                      ),
-                    ),
-                  ],
-                  if (isRepost) ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: _divider),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            originalName,
-                            style: TextStyle(
-                              color: _text,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          if (originalUsername.isNotEmpty)
-                            Text(
-                              '@$originalUsername',
-                              style: TextStyle(color: _muted, fontSize: 12),
-                            ),
-                          if ((repostOf?['content'] ?? '')
-                              .toString()
-                              .trim()
-                              .isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              repostOf!['content'].toString(),
-                              style: TextStyle(color: _text, height: 1.4),
-                            ),
-                          ],
-                          _buildMedia(repostOf!),
-                        ],
-                      ),
-                    ),
-                  ] else
-                    _buildMedia(post),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _actionButton(
-                        icon: liked
-                            ? CupertinoIcons.heart_fill
-                            : CupertinoIcons.heart,
-                        color: liked ? _accent : _muted,
-                        count: likeCount,
-                        onTap: () => _toggleLikePost(post),
-                      ),
-                      _actionButton(
-                        icon: CupertinoIcons.bubble_left,
-                        count: _num(post['commentsCount']),
-                        onTap: () => _openPostComments(post),
-                      ),
-                      _actionButton(
-                        icon: CupertinoIcons.arrow_2_squarepath,
-                        count: _num(post['repostsCount']),
-                        onTap: () => _repostProfilePost(post),
-                      ),
-                      _actionButton(
-                        icon: CupertinoIcons.share,
-                        onTap: () => _shareProfilePost(post),
-                      ),
-                    ],
                   ),
                 ],
               ),
             ),
-          ],
-        ),
-      ],
-    ),
-  );
-}
 
-Widget _actionButton({
-  required IconData icon,
-  required VoidCallback onTap,
-  int? count,
-  Color? color,
-}) {
-  return InkWell(
-    onTap: onTap,
-    borderRadius: BorderRadius.circular(20),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 19, color: color ?? _muted),
-          if (count != null) ...[
-            const SizedBox(width: 5),
+          // HEADER
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _avatar(authorMap['avatar'], displayName, 42),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _text,
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            '@$username',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: _muted, fontSize: 13.5),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text('•', style: TextStyle(color: _muted)),
+                        const SizedBox(width: 6),
+                        Text(
+                          _timeAgo(post['createdAt']),
+                          style: TextStyle(color: _muted, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          if (content.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
             Text(
-              '$count',
-              style: TextStyle(color: color ?? _muted, fontSize: 12),
+              content,
+              style: TextStyle(color: _text, fontSize: 15.5, height: 1.42),
             ),
           ],
+
+          if (!isRepost) _buildMedia(post),
+
+          if (isRepost) ...[
+            const SizedBox(height: 10),
+            _quotedPost(repostOf),
+          ],
+
+          const SizedBox(height: 6),
+
+          // ACTIONS (same icons / size as my profile and home)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _actionButton(
+                icon: liked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+                color: liked ? _accent : _muted,
+                count: likeCount,
+                onTap: () => _toggleLikePost(post),
+              ),
+              _actionButton(
+                icon: CupertinoIcons.bubble_left,
+                count: _num(post['commentsCount']),
+                onTap: () => _openPostComments(post),
+              ),
+              _actionButton(
+                icon: CupertinoIcons.arrow_2_squarepath,
+                count: _num(post['repostsCount']),
+                onTap: () => _repostProfilePost(post),
+              ),
+              _actionButton(
+                icon: CupertinoIcons.arrowshape_turn_up_right,
+                count: _num(post['sharesCount']),
+                onTap: () => _shareProfilePost(post),
+              ),
+            ],
+          ),
         ],
       ),
-    ),
-  );
-}
+    );
+  }
 
+  Widget _quotedPost(Map<String, dynamic> original) {
+    final authorRaw = original['author'];
 
-Widget _profileTabs() {
-  const icons = [
-    CupertinoIcons.doc_text,
-    CupertinoIcons.arrow_2_squarepath,
-    CupertinoIcons.heart,
-    CupertinoIcons.chat_bubble,
-  ];
+    final author = authorRaw is Map
+        ? Map<String, dynamic>.from(authorRaw)
+        : <String, dynamic>{};
 
-  return Container(
-    decoration: BoxDecoration(
-      border: Border(
-        bottom: BorderSide(color: _divider),
+    final name = (author['displayName'] ?? author['username'] ?? 'User')
+        .toString();
+
+    final username = (author['username'] ?? '').toString();
+
+    final content = (original['content'] ?? '').toString();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: _divider),
+        borderRadius: BorderRadius.circular(16),
       ),
-    ),
-    child: Row(
-      children: List.generate(icons.length, (index) {
-        final selected = _selectedTabIndex == index;
-
-        return Expanded(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              setState(() {
-                _selectedTabIndex = index;
-              });
-            },
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  child: Icon(
-                    icons[index],
-                    size: 22,
-                    color: selected ? _text : _muted,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _avatar(author['avatar'], name, 28),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _text,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                Container(
-                  height: 3,
-                  width: 42,
-                  decoration: BoxDecoration(
-                    color: selected ? _accent : Colors.transparent,
-                    borderRadius: BorderRadius.circular(10),
+              ),
+              if (username.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    '@$username',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: _muted, fontSize: 13),
                   ),
                 ),
               ],
-            ),
+            ],
           ),
-        );
-      }),
-    ),
-  );
-}
+          if (content.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              content,
+              maxLines: 5,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: _text, fontSize: 14, height: 1.35),
+            ),
+          ],
+          _buildMedia(original, imageHeight: 190),
+        ],
+      ),
+    );
+  }
+
+  Widget _actionButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    int? count,
+    Color? color,
+  }) {
+    final tint = color ?? _muted;
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _boldIcon(icon, 21, tint),
+            if (count != null && count > 0) ...[
+              const SizedBox(width: 5),
+              Text(
+                _formatCount(count),
+                style: TextStyle(
+                  color: tint,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _profileTabs() {
+    const icons = [
+      CupertinoIcons.doc_text,
+      CupertinoIcons.arrow_2_squarepath,
+      CupertinoIcons.heart,
+      CupertinoIcons.bubble_left,
+      CupertinoIcons.play_rectangle,
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: _divider)),
+      ),
+      child: Row(
+        children: List.generate(icons.length, (index) {
+          final selected = _selectedTabIndex == index;
+
+          return Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                setState(() {
+                  _selectedTabIndex = index;
+                });
+              },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: _boldIcon(
+                      selected && index == 2
+                          ? CupertinoIcons.heart_fill
+                          : icons[index],
+                      22,
+                      selected ? _accent : _muted,
+                    ),
+                  ),
+                  Container(
+                    height: 3,
+                    width: 42,
+                    decoration: BoxDecoration(
+                      color: selected ? _accent : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
 
   // ============================================================
   // BUILD
@@ -1570,10 +1578,12 @@ Widget _profileTabs() {
     return Scaffold(
       backgroundColor: _background,
       appBar: AppBar(
-        backgroundColor: _background,
+        backgroundColor: _surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
         foregroundColor: _text,
+        shape: Border(bottom: BorderSide(color: _divider, width: 0.8)),
         title: Text(
           _user == null ? 'Profile' : _displayName,
           style: TextStyle(
@@ -1584,7 +1594,7 @@ Widget _profileTabs() {
         ),
       ),
       body: _loadingProfile
-          ? Center(child: CircularProgressIndicator(color: _text))
+          ? const Center(child: CircularProgressIndicator(color: _accent))
           : _user == null
               ? Center(
                   child: Padding(
@@ -1613,7 +1623,7 @@ Widget _profileTabs() {
                   ),
                 )
               : RefreshIndicator(
-                  color: _text,
+                  color: _accent,
                   backgroundColor: _surface,
                   onRefresh: _load,
                   child: ListView(
@@ -1624,35 +1634,41 @@ _header(),
 
 _profileTabs(),
 
-if (_selectedTabIndex == 3
-    ? _loadingCommentedPosts
-    : _loadingPosts)
+if (_selectedTabIndex == 4
+    ? _loadingShorts
+    : _selectedTabIndex == 3
+        ? _loadingCommentedPosts
+        : _loadingPosts)
   const Padding(
     padding: EdgeInsets.all(32),
     child: Center(
-      child: CircularProgressIndicator(strokeWidth: 2),
+      child: CircularProgressIndicator(strokeWidth: 2, color: _accent),
     ),
   ),
 
-if (!(_selectedTabIndex == 3
-        ? _loadingCommentedPosts
-        : _loadingPosts) &&
+if (!(_selectedTabIndex == 4
+        ? _loadingShorts
+        : _selectedTabIndex == 3
+            ? _loadingCommentedPosts
+            : _loadingPosts) &&
     _visiblePosts.isEmpty)
   Padding(
     padding: const EdgeInsets.all(36),
     child: Center(
       child: Column(
         children: [
-          Icon(
-            _selectedTabIndex == 3
+          _boldIcon(
+            _selectedTabIndex == 4
+                ? CupertinoIcons.play_rectangle
+                : _selectedTabIndex == 3
                 ? CupertinoIcons.bubble_left
                 : _selectedTabIndex == 2
                     ? CupertinoIcons.heart
                     : _selectedTabIndex == 1
                         ? CupertinoIcons.arrow_2_squarepath
                         : CupertinoIcons.doc_text,
-            size: 32,
-            color: _muted,
+            32,
+            _muted,
           ),
           const SizedBox(height: 12),
           Text(
@@ -1661,6 +1677,7 @@ if (!(_selectedTabIndex == 3
               'No reposts yet',
               'No liked posts yet',
               'No commented posts yet',
+              'No shorts yet',
             ][_selectedTabIndex],
             style: TextStyle(
               color: _muted,
@@ -1672,9 +1689,11 @@ if (!(_selectedTabIndex == 3
     ),
   ),
 
-if (!(_selectedTabIndex == 3
-        ? _loadingCommentedPosts
-        : _loadingPosts) &&
+if (!(_selectedTabIndex == 4
+        ? _loadingShorts
+        : _selectedTabIndex == 3
+            ? _loadingCommentedPosts
+            : _loadingPosts) &&
     _visiblePosts.isNotEmpty)
   ..._visiblePosts.map(_postCard),
 
@@ -1682,6 +1701,61 @@ const SizedBox(height: 40),
                     ],
                   ),
                 ),
+    );
+  }
+}
+
+// ==================================================================
+// MEDIA PAGER (1/N, 2/N ... badge when there is more than one item)
+// ==================================================================
+
+class _MediaPager extends StatefulWidget {
+  final double height;
+  final List<Widget> children;
+
+  const _MediaPager({required this.height, required this.children});
+
+  @override
+  State<_MediaPager> createState() => _MediaPagerState();
+}
+
+class _MediaPagerState extends State<_MediaPager> {
+  int _page = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = widget.children.length;
+
+    return SizedBox(
+      height: widget.height,
+      child: Stack(
+        children: [
+          PageView(
+            onPageChanged: (value) => setState(() => _page = value),
+            children: widget.children,
+          ),
+          if (total > 1)
+            Positioned(
+              top: 10,
+              right: 10,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(.6),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${_page + 1}/$total',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

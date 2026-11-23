@@ -113,6 +113,7 @@ exports.createPost = async (
       videos = [],
       location = '',
       poll = null,
+      isShort = false,
     } = req.body || {};
 
     // Up to 10 photos and 5 videos per post.
@@ -208,6 +209,8 @@ exports.createPost = async (
           cleanLocation,
         poll:
           cleanPoll,
+        isShort:
+          isShort === true,
         author:
           userId,
       });
@@ -250,9 +253,10 @@ exports.createPost = async (
 // GET POSTS
 // ============================================================
 
-exports.getPosts = async (
+const loadPosts = async (
   req,
-  res
+  res,
+  buildQuery
 ) => {
   try {
     const userId =
@@ -267,7 +271,7 @@ exports.getPosts = async (
     }
 
     const allPosts =
-  await Post.find()
+  await Post.find(buildQuery(req))
     .populate('author', AUTHOR_FIELDS)
     .populate({
       path: 'repostOf',
@@ -415,6 +419,35 @@ for (const post of allPosts) {
     });
   }
 };
+
+// Home feed: everything except posts made from the Shorts screen.
+exports.getPosts = (req, res) =>
+  loadPosts(req, res, () => ({
+    isShort: { $ne: true },
+  }));
+
+// Shorts: GET /api/posts/shorts
+//  - no query     -> every video post + every short (Shorts screen)
+//  - ?userId=<id> -> only the shorts posted by that user (profile tab)
+exports.getShorts = (req, res) =>
+  loadPosts(req, res, (request) => {
+    const profileUserId = cleanString(request.query?.userId);
+
+    if (profileUserId && isValidObjectId(profileUserId)) {
+      return {
+        author: profileUserId,
+        isShort: true,
+      };
+    }
+
+    return {
+      $or: [
+        { isShort: true },
+        { video: { $nin: ['', null] } },
+        { 'videos.0': { $exists: true } },
+      ],
+    };
+  });
 
 // ============================================================
 // LIKE / UNLIKE

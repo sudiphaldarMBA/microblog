@@ -3,12 +3,15 @@ import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../services/api_service.dart';
 import '../../widgets/comments_sheet.dart';
+import '../profile/profile_screen.dart';
+import '../profile/user_profile_screen.dart';
 
 class ShortsScreen extends StatefulWidget {
   const ShortsScreen({super.key});
@@ -20,6 +23,7 @@ class ShortsScreen extends StatefulWidget {
 class _ShortsScreenState extends State<ShortsScreen> {
   static const Color _background = Colors.black;
   static const Color _accent = Color(0xFF1D9BF0);
+  static const Color _pink = Color(0xFFF91880);
 
   final PageController _pageController = PageController();
   final Set<String> _viewedThisSession = {};
@@ -29,15 +33,217 @@ class _ShortsScreenState extends State<ShortsScreen> {
   String? _error;
   int _activeIndex = 0;
 
+  String _myId = '';
+  bool _publishing = false;
+
+  // True while another screen (for example a profile) is open on top,
+  // so the Short stops playing in the background.
+  bool _paused = false;
+
   @override
   void initState() {
     super.initState();
+    _loadMe();
     _loadShorts();
+  }
+
+  Future<void> _loadMe() async {
+    try {
+      final me = await ApiService.getCurrentUser();
+      _myId = (me['_id'] ?? me['id'] ?? '').toString();
+    } catch (_) {}
+  }
+
+  Map<String, dynamic> _authorOf(Map<String, dynamic> post) {
+    final author = post['author'];
+    return author is Map ? Map<String, dynamic>.from(author) : {};
+  }
+
+  String _displayName(Map<String, dynamic> post) {
+    final author = _authorOf(post);
+    final name = author['displayName']?.toString().trim() ?? '';
+    return name.isNotEmpty ? name : _username(post);
+  }
+
+  Future<void> _openAuthor(Map<String, dynamic> post) async {
+    final author = _authorOf(post);
+    final authorId = (author['_id'] ?? author['id'] ?? '').toString();
+
+    if (authorId.isEmpty) return;
+
+    setState(() => _paused = true);
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => authorId == _myId
+            ? const ProfileScreen()
+            : UserProfileScreen(userId: authorId, initialUser: author),
+      ),
+    );
+
+    if (!mounted) return;
+
+    setState(() => _paused = false);
+  }
+
+  // ------------------------------------------------------------
+  // CREATE A SHORT (camera icon)
+  // ------------------------------------------------------------
+
+  Future<void> _createShort() async {
+    if (_publishing) return;
+
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: const Color(0xFF15171B),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        Widget option(IconData icon, String label, ImageSource value) {
+          return ListTile(
+            leading: Icon(icon, color: _pink, size: 24),
+            title: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            onTap: () => Navigator.pop(sheetContext, value),
+          );
+        }
+
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 10),
+              Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF282B31),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const SizedBox(height: 8),
+              option(
+                CupertinoIcons.videocam,
+                'Record a video',
+                ImageSource.camera,
+              ),
+              option(
+                CupertinoIcons.photo_on_rectangle,
+                'Choose from gallery',
+                ImageSource.gallery,
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (source == null || !mounted) return;
+
+    try {
+      final XFile? video = await ImagePicker().pickVideo(
+        source: source,
+        maxDuration: const Duration(minutes: 100),
+      );
+
+      if (video == null || !mounted) return;
+
+      final caption = await _askCaption();
+
+      if (caption == null || !mounted) return;
+
+      setState(() => _publishing = true);
+
+      final data = await ApiService.fileToDataUrl(File(video.path));
+
+      final result = await ApiService.createPost(
+        content: caption,
+        video: data,
+        isShort: true,
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        _showMessage('Short posted');
+        await _loadShorts();
+      } else {
+        _showMessage(result['message']?.toString() ?? 'Unable to post Short');
+      }
+    } catch (error) {
+      debugPrint('Create Short error: $error');
+      _showMessage('Unable to post Short');
+    } finally {
+      if (mounted) setState(() => _publishing = false);
+    }
+  }
+
+  Future<String?> _askCaption() {
+    final controller = TextEditingController();
+
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF15171B),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text(
+            'New Short',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          content: TextField(
+            controller: controller,
+            maxLength: 300,
+            maxLines: 3,
+            minLines: 1,
+            cursorColor: _pink,
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(
+              hintText: 'Write a caption...',
+              hintStyle: TextStyle(color: Color(0xFF9297A0)),
+              counterStyle: TextStyle(color: Color(0xFF9297A0)),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+            TextButton(
+              onPressed: () =>
+                  Navigator.pop(dialogContext, controller.text.trim()),
+              child: const Text(
+                'Post',
+                style: TextStyle(
+                  color: _pink,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _loadShorts() async {
     try {
-      final result = await ApiService.getPosts();
+      final result = await ApiService.getShorts();
 
       if (result['success'] != true) {
         throw Exception(result['message'] ?? 'Unable to load videos');
@@ -277,6 +483,20 @@ class _ShortsScreenState extends State<ShortsScreen> {
                   ),
                   const Spacer(),
                   IconButton(
+                    tooltip: 'Create Short',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: _createShort,
+                    icon: const Icon(
+                      CupertinoIcons.camera,
+                      color: _pink,
+                      size: 23,
+                      shadows: [
+                        Shadow(color: _pink, offset: Offset(.45, 0)),
+                        Shadow(color: _pink, offset: Offset(-.45, 0)),
+                      ],
+                    ),
+                  ),
+                  IconButton(
                     tooltip: 'Refresh Shorts',
                     visualDensity: VisualDensity.compact,
                     onPressed: _loadShorts,
@@ -289,6 +509,28 @@ class _ShortsScreenState extends State<ShortsScreen> {
                 ],
               ),
             ),
+
+            if (_publishing)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black54,
+                  alignment: Alignment.center,
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(color: _pink),
+                      SizedBox(height: 14),
+                      Text(
+                        'Posting your Short...',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -333,8 +575,11 @@ class _ShortsScreenState extends State<ShortsScreen> {
         return _ShortPage(
           key: ValueKey(_postId(post)),
           post: post,
-          isActive: index == _activeIndex,
+          isActive: index == _activeIndex && !_paused,
           username: _username(post),
+          displayName: _displayName(post),
+          avatar: _authorOf(post)['avatar'],
+          onOpenAuthor: () => _openAuthor(post),
           caption: _caption(post),
           likesCount: _count(post['likesCount']),
           commentsCount: _count(post['commentsCount']),
@@ -394,6 +639,9 @@ class _ShortPage extends StatefulWidget {
   final Map<String, dynamic> post;
   final bool isActive;
   final String username;
+  final String displayName;
+  final dynamic avatar;
+  final VoidCallback onOpenAuthor;
   final String caption;
   final int likesCount;
   final int commentsCount;
@@ -411,6 +659,9 @@ class _ShortPage extends StatefulWidget {
     required this.post,
     required this.isActive,
     required this.username,
+    required this.displayName,
+    required this.avatar,
+    required this.onOpenAuthor,
     required this.caption,
     required this.likesCount,
     required this.commentsCount,
@@ -620,44 +871,6 @@ class _ShortPageState extends State<_ShortPage> {
             ),
           ),
 
-        Positioned(
-          right: 23,
-          bottom: 330,
-          child: GestureDetector(
-            onTap: () async {
-              final controller = _controller;
-              if (controller == null || !controller.value.isInitialized) {
-                return;
-              }
-
-              final newMutedState = !_isMuted;
-
-              try {
-                await controller.setVolume(newMutedState ? 0.0 : 1.0);
-
-                if (!mounted) return;
-
-                setState(() {
-                  _isMuted = newMutedState;
-                });
-              } catch (error) {
-                debugPrint('Unable to change video volume: $error');
-              }
-            },
-            child: CircleAvatar(
-              radius: 18,
-              backgroundColor: Colors.black54,
-              child: Icon(
-                _isMuted
-                    ? CupertinoIcons.speaker_slash_fill
-                    : CupertinoIcons.speaker_2_fill,
-                color: Colors.white,
-                size: 18,
-              ),
-            ),
-          ),
-        ),
-
         if (controller != null &&
             controller.value.isInitialized &&
             !controller.value.isPlaying)
@@ -709,29 +922,52 @@ class _ShortPageState extends State<_ShortPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                '@${widget.username}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: widget.onOpenAuthor,
+                child: Row(
+                  children: [
+                    _avatar(widget.avatar, widget.displayName, 18),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Text(
+                        widget.username.isNotEmpty
+                            ? '${widget.displayName}  @${widget.username}'
+                            : widget.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               if (widget.caption.trim().isNotEmpty) ...[
-                const SizedBox(height: 7),
+                const SizedBox(height: 10),
                 Text(
                   widget.caption,
                   maxLines: 4,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 13,
+                    fontSize: 14.5,
                     height: 1.35,
                   ),
                 ),
               ],
+              const SizedBox(height: 10),
+              Text(
+                '${_formatCount(widget.viewsCount)} views',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ],
           ),
         ),
@@ -739,7 +975,7 @@ class _ShortPageState extends State<_ShortPage> {
         // Compact, consistently aligned action rail.
         Positioned(
           right: 9,
-          bottom: 24,
+          bottom: 84,
           child: SizedBox(
             width: 62,
             child: Column(
@@ -778,17 +1014,48 @@ class _ShortPageState extends State<_ShortPage> {
                   label: 'Save',
                   onTap: widget.onBookmark,
                 ),
-                const SizedBox(height: 15),
-                _ShortAction(
-                  icon: CupertinoIcons.eye,
-                  label: _formatCount(widget.viewsCount),
-                  onTap: null,
-                ),
               ],
             ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _avatar(dynamic image, String name, double radius) {
+    final value = image?.toString().trim() ?? '';
+
+    Widget fallback() {
+      final trimmed = name.trim();
+
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: const Color(0xFF25282D),
+        child: Text(
+          trimmed.isEmpty ? '?' : trimmed.substring(0, 1).toUpperCase(),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: radius * .8,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      );
+    }
+
+    if (value.isEmpty) return fallback();
+
+    final bytes = ApiService.dataUrlToBytes(value);
+    final url = bytes == null ? ApiService.normalizeImageUrl(value) : null;
+
+    if (bytes == null && url == null) return fallback();
+
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: const Color(0xFF25282D),
+      backgroundImage: bytes != null
+          ? MemoryImage(bytes) as ImageProvider
+          : NetworkImage(url!),
+      onBackgroundImageError: (_, __) {},
     );
   }
 
@@ -828,7 +1095,15 @@ class _ShortAction extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: color, size: 25),
+              Icon(
+                icon,
+                color: color,
+                size: 21,
+                shadows: [
+                  Shadow(color: color, offset: const Offset(.45, 0)),
+                  Shadow(color: color, offset: const Offset(-.45, 0)),
+                ],
+              ),
               const SizedBox(height: 4),
               Text(
                 label,
@@ -836,8 +1111,8 @@ class _ShortAction extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],

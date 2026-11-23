@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -305,32 +304,6 @@ class _HomeVideoPlayerState extends State<HomeVideoPlayer> {
                     ),
                   ),
                 ),
-
-              Positioned(
-                bottom: 8,
-                right: 8,
-                child: Material(
-                  color: Colors.black45,
-                  shape: const CircleBorder(),
-                  child: IconButton(
-                    tooltip: _isMuted ? 'Unmute video' : 'Mute video',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 36,
-                      minHeight: 36,
-                    ),
-                    visualDensity: VisualDensity.compact,
-                    iconSize: 20,
-                    onPressed: _toggleMute,
-                    icon: Icon(
-                      _isMuted
-                          ? Icons.volume_off_rounded
-                          : Icons.volume_up_rounded,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         ),

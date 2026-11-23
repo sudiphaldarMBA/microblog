@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/api_service.dart';
+import '../../widgets/comments_sheet.dart';
 import '../home/home_video_player.dart';
 import 'edit_profile_screen.dart';
 import 'follow_list_screen.dart';
@@ -79,6 +80,9 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   List<Map<String, dynamic>>? _commentedPosts;
 
+  // Videos posted from the Shorts screen (loaded when the tab opens).
+  List<Map<String, dynamic>>? _shortPosts;
+
   // ============================================================
   // INIT
   // ============================================================
@@ -87,7 +91,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   void initState() {
     super.initState();
 
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
 
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) {
@@ -103,6 +107,10 @@ class _ProfileScreenState extends State<ProfileScreen>
 
       if (_activeTab == 3 && _commentedPosts == null) {
         _reloadCommented();
+      }
+
+      if (_activeTab == 4 && _shortPosts == null) {
+        _reloadShorts();
       }
 
       _loadPostsIfNeeded();
@@ -260,6 +268,20 @@ class _ProfileScreenState extends State<ProfileScreen>
     if (_activeTab == 3 && mounted) {
       await _reloadCommented();
     }
+
+    if (_activeTab == 4 && mounted) {
+      await _reloadShorts();
+    }
+  }
+
+  Future<void> _reloadShorts() async {
+    final posts = await _loadShortPosts();
+
+    if (!mounted) return;
+
+    setState(() {
+      _shortPosts = posts;
+    });
   }
 
   Future<void> _reloadCommented() async {
@@ -979,6 +1001,34 @@ class _ProfileScreenState extends State<ProfileScreen>
     }).toList();
   }
 
+  Future<List<Map<String, dynamic>>> _loadShortPosts() async {
+    try {
+      final result = await ApiService.getShorts(userId: _userId);
+
+      if (result['success'] != true) {
+        throw Exception(result['message'] ?? 'Unable to load shorts');
+      }
+
+      final rawPosts = result['data']?['posts'];
+
+      final List<Map<String, dynamic>> posts = [];
+
+      if (rawPosts is List) {
+        for (final raw in rawPosts) {
+          if (raw is Map) {
+            posts.add(Map<String, dynamic>.from(raw));
+          }
+        }
+      }
+
+      return posts;
+    } catch (error) {
+      debugPrint('Load Shorts Error: $error');
+
+      return [];
+    }
+  }
+
   Future<List<Map<String, dynamic>>> _loadCommentedPosts() async {
     try {
       final result = await ApiService.getMyCommentedPosts();
@@ -1021,6 +1071,18 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Widget _buildActivityTab() {
+    if (_activeTab == 4) {
+      if (_shortPosts == null) {
+        return _loadingBox();
+      }
+
+      return _buildPostList(
+        _shortPosts!,
+        emptyTitle: 'No shorts yet',
+        emptySubtitle: 'Videos you post from Shorts will appear here.',
+      );
+    }
+
     if (_activeTab == 3) {
       if (_commentedPosts == null) {
         return _loadingBox();
@@ -1086,7 +1148,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                       ? CupertinoIcons.arrow_2_squarepath
                       : _activeTab == 2
                           ? CupertinoIcons.heart
-                          : CupertinoIcons.bubble_left,
+                          : _activeTab == 4
+                              ? CupertinoIcons.play_rectangle
+                              : CupertinoIcons.bubble_left,
               34,
               _muted,
             ),
@@ -1644,6 +1708,9 @@ class _ProfileScreenState extends State<ProfileScreen>
 
       setState(() {
         _allPosts.removeWhere((p) => deleted.contains(p['_id']?.toString()));
+        _shortPosts?.removeWhere(
+          (p) => deleted.contains(p['_id']?.toString()),
+        );
       });
 
       _snack('${label[0].toUpperCase()}${label.substring(1)} deleted');
@@ -1661,7 +1728,11 @@ class _ProfileScreenState extends State<ProfileScreen>
     if (!mounted) return;
 
     setState(() {
-      for (final list in [_allPosts, _commentedPosts ?? <Map<String, dynamic>>[]]) {
+      for (final list in [
+        _allPosts,
+        _commentedPosts ?? <Map<String, dynamic>>[],
+        _shortPosts ?? <Map<String, dynamic>>[],
+      ]) {
         for (final post in list) {
           if (post['_id']?.toString() == postId) {
             change(post);
@@ -1672,7 +1743,11 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Map<String, dynamic>? _findPost(String postId) {
-    for (final list in [_allPosts, _commentedPosts ?? <Map<String, dynamic>>[]]) {
+    for (final list in [
+      _allPosts,
+      _commentedPosts ?? <Map<String, dynamic>>[],
+      _shortPosts ?? <Map<String, dynamic>>[],
+    ]) {
       for (final post in list) {
         if (post['_id']?.toString() == postId) return post;
       }
@@ -1891,278 +1966,27 @@ class _ProfileScreenState extends State<ProfileScreen>
       return;
     }
 
-    final controller = TextEditingController();
-
-    List<dynamic> comments = [];
-
-    bool sending = false;
-
     int? latestCount;
 
-    try {
-      final result = await ApiService.getComments(postId: postId);
-
-      if (result['success'] == true) {
-        final raw = result['data']?['comments'];
-
-        if (raw is List) {
-          comments = List<dynamic>.from(raw);
-        }
-      }
-    } catch (error) {
-      debugPrint('Get Comments Error: $error');
-    }
-
-    if (!mounted) {
-      controller.dispose();
-      return;
-    }
-
-    await showModalBottomSheet(
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: _surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
       builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            Future<void> sendComment() async {
-              final text = controller.text.trim();
-
-              if (text.isEmpty || sending) {
-                return;
-              }
-
-              setModalState(() {
-                sending = true;
-              });
-
-              try {
-                final result = await ApiService.createComment(
-                  postId: postId,
-                  content: text,
-                );
-
-                if (result['success'] == true) {
-                  final comment = result['data']?['comment'];
-
-                  if (comment != null) {
-                    final total = result['data']?['commentsCount'];
-
-                    latestCount = total is num ? total.toInt() : null;
-
-                    setModalState(() {
-                      comments.add(comment);
-                      controller.clear();
-                    });
-                  }
-                } else if (sheetContext.mounted) {
-                  ScaffoldMessenger.of(sheetContext).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        result['message']?.toString() ??
-                            'Unable to add comment',
-                      ),
-                    ),
-                  );
-                }
-              } catch (error) {
-                debugPrint('Create Comment Error: $error');
-              } finally {
-                if (sheetContext.mounted) {
-                  setModalState(() {
-                    sending = false;
-                  });
-                }
-              }
-            }
-
-            return SafeArea(
-              child: Padding(
-                padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-                ),
-                child: SizedBox(
-                  height: MediaQuery.of(sheetContext).size.height * 0.78,
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(18, 14, 10, 12),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Comments',
-                                style: TextStyle(
-                                  color: _text,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                            IconButton(
-                              onPressed: () => Navigator.pop(sheetContext),
-                              icon: _boldIcon(CupertinoIcons.xmark, 20, _text),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Divider(height: 1, color: _divider),
-                      Expanded(
-                        child: comments.isEmpty
-                            ? Center(
-                                child: Text(
-                                  'No comments yet.\nBe the first to comment.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: _muted, fontSize: 14),
-                                ),
-                              )
-                            : ListView.builder(
-                                padding: const EdgeInsets.all(16),
-                                itemCount: comments.length,
-                                itemBuilder: (context, index) {
-                                  final raw = comments[index];
-
-                                  if (raw is! Map) {
-                                    return const SizedBox.shrink();
-                                  }
-
-                                  final comment = Map<String, dynamic>.from(raw);
-
-                                  final author = comment['author'];
-
-                                  final username = author is Map
-                                      ? author['username']?.toString() ?? 'User'
-                                      : 'User';
-
-                                  final content =
-                                      comment['content']?.toString() ?? '';
-
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 14),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        _buildSmallAvatar(
-                                          author is Map
-                                              ? Map<String, dynamic>.from(author)
-                                              : <String, dynamic>{},
-                                          34,
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Container(
-                                            padding: const EdgeInsets.all(12),
-                                            decoration: BoxDecoration(
-                                              color: _secondarySurface,
-                                              borderRadius:
-                                                  BorderRadius.circular(15),
-                                            ),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  username,
-                                                  style: TextStyle(
-                                                    color: _text,
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w800,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 5),
-                                                Text(
-                                                  content,
-                                                  style: TextStyle(
-                                                    color: _text,
-                                                    fontSize: 14,
-                                                    height: 1.35,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
-                        decoration: BoxDecoration(
-                          color: _surface,
-                          border: Border(top: BorderSide(color: _divider)),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: controller,
-                                maxLength: 300,
-                                minLines: 1,
-                                maxLines: 4,
-                                cursorColor: _accent,
-                                style: TextStyle(color: _text),
-                                decoration: InputDecoration(
-                                  hintText: 'Write a comment...',
-                                  hintStyle: TextStyle(color: _muted),
-                                  counterText: '',
-                                  filled: true,
-                                  fillColor: _secondarySurface,
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(22),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 12,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            GestureDetector(
-                              onTap: sending ? null : sendComment,
-                              child: Container(
-                                width: 46,
-                                height: 46,
-                                decoration: const BoxDecoration(
-                                  color: _accent,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: sending
-                                    ? const Padding(
-                                        padding: EdgeInsets.all(13),
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : const Icon(
-                                        CupertinoIcons.arrow_up,
-                                        color: Colors.white,
-                                      ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
+        return SizedBox(
+          height: MediaQuery.of(sheetContext).size.height * 0.85,
+          child: CommentsSheet(
+            postId: postId,
+            onCountChanged: (count) => latestCount = count,
+          ),
         );
       },
     );
 
-    controller.dispose();
+    if (!mounted) {
+      return;
+    }
 
     final newCount = latestCount;
 
@@ -2481,11 +2305,23 @@ class _ProfileScreenState extends State<ProfileScreen>
           Positioned(
             right: 12,
             bottom: 12,
-            child: _circleButton(
-              icon: CupertinoIcons.camera,
+            // Same pink camera button as the profile photo.
+            child: GestureDetector(
               onTap: _pickCoverPhoto,
-              background: Colors.black.withOpacity(.65),
-              foreground: Colors.white,
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: _accent,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _background, width: 2.5),
+                ),
+                child: const Icon(
+                  CupertinoIcons.camera_fill,
+                  color: Colors.white,
+                  size: 15,
+                ),
+              ),
             ),
           ),
         ],
@@ -2597,18 +2433,18 @@ class _ProfileScreenState extends State<ProfileScreen>
                 top: 170 + 10,
                 child: OutlinedButton.icon(
                   onPressed: _openEditProfile,
-                  icon: _boldIcon(Icons.edit_outlined, 15, _text),
+                  icon: _boldIcon(Icons.edit_outlined, 16, _accent),
                   label: Text(
                     'Edit profile',
                     style: TextStyle(
                       color: _text,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: _text,
-                    side: BorderSide(color: _divider, width: 1),
+                    side: BorderSide(color: _divider, width: 1.4),
                     minimumSize: const Size(0, 32),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -2713,7 +2549,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       'Following',
                       () => _openConnections(followers: false),
                     ),
-                    const SizedBox(width: 26),
+                    const SizedBox(width: 18),
                     _countText(
                       _followersCount,
                       'Followers',
@@ -2770,6 +2606,13 @@ class _ProfileScreenState extends State<ProfileScreen>
                     CupertinoIcons.bubble_left,
                     22,
                     _activeTab == 3 ? _accent : _muted,
+                  ),
+                ),
+                Tab(
+                  icon: _boldIcon(
+                    CupertinoIcons.play_rectangle,
+                    22,
+                    _activeTab == 4 ? _accent : _muted,
                   ),
                 ),
               ],
@@ -2867,16 +2710,16 @@ class _ProfileScreenState extends State<ProfileScreen>
               _formatCount(count),
               style: TextStyle(
                 color: _text,
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 5),
             Text(
               label,
               style: TextStyle(
-                color: _text,
-                fontSize: 16.5,
+                color: _muted,
+                fontSize: 13.5,
                 fontWeight: FontWeight.w800,
               ),
             ),

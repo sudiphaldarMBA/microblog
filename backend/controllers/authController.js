@@ -4,6 +4,8 @@ const crypto = require("crypto");
 
 const User = require("../models/User");
 const Session = require("../models/Session");
+const PasswordReset = require("../models/PasswordReset");
+const { sendPasswordResetOtp } = require("../config/emailService");
 const { auth: firebaseAuth } = require("../config/firebaseAdmin");
 
 // ==========================================================
@@ -1373,6 +1375,481 @@ exports.changePassword = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Unable to change password",
+    });
+  }
+};
+
+
+// ==========================================================
+// FORGOT PASSWORD — EMAIL OTP
+// ==========================================================
+
+const hashPasswordResetValue = (value) => {
+  return crypto
+    .createHmac("sha256", process.env.JWT_SECRET)
+    .update(value)
+    .digest("hex");
+};
+
+exports.requestPasswordReset = async (req, res) => {
+  try {
+    const email = String(req.body.email || "")
+      .trim()
+      .toLowerCase();
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    const genericMessage =
+      "If an eligible account exists, a verification code will be sent.";
+
+    const user = await User.findOne({
+      email,
+      password: { $exists: true, $ne: null },
+    });
+
+    // Do not reveal whether an account exists.
+    if (!user) {
+      return res.status(200).json({
+        success: true,
+        message: genericMessage,
+      });
+    }
+
+    let resetRecord = await PasswordReset.findOne({
+      user: user._id,
+    });
+
+    const now = new Date();
+
+    // Prevent repeated OTP requests within 60 seconds.
+    if (
+      resetRecord?.lastSentAt &&
+      now.getTime() - resetRecord.lastSentAt.getTime() < 60000
+    ) {
+      return res.status(200).json({
+        success: true,
+        message: genericMessage,
+      });
+    }
+
+    // Generate a cryptographically secure six-digit OTP.
+    const otp = crypto.randomInt(100000, 1000000).toString();
+
+    const otpHash = hashPasswordResetValue(otp);
+
+    if (!resetRecord) {
+      resetRecord = new PasswordReset({
+        user: user._id,
+        channel: "email",
+      });
+    }
+
+    resetRecord.channel = "email";
+    resetRecord.otpHash = otpHash;
+    resetRecord.otpExpiresAt = new Date(
+      now.getTime() + 10 * 60 * 1000
+    );
+    resetRecord.attempts = 0;
+    resetRecord.lastSentAt = now;
+    resetRecord.resetTokenHash = null;
+    resetRecord.resetTokenExpiresAt = null;
+    resetRecord.usedAt = null;
+    resetRecord.purgeAt = new Date(
+      now.getTime() + 24 * 60 * 60 * 1000
+    );
+
+    await resetRecord.save();
+
+    try {
+      await sendPasswordResetOtp(email, otp);
+    } catch (emailError) {
+      console.error(
+        "Password reset email delivery failed:",
+        emailError.message
+      );
+
+      // Keep the public response generic to avoid
+      // revealing whether the account exists.
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: genericMessage,
+    });
+  } catch (error) {
+    console.error("Request password reset error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to process your request",
+    });
+  }
+};
+
+// ==========================================================
+// VERIFY PASSWORD RESET EMAIL OTP
+// ==========================================================
+
+exports.verifyPasswordResetOtp = async (req, res) => {
+  try {
+    const email = String(req.body.email || "")
+      .trim()
+      .toLowerCase();
+
+    const otp = String(req.body.otp || "").trim();
+
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and OTP are required",
+      });
+    }
+
+    if (!/^\d{6}$/.test(otp)) {
+      return res.status(400).json({
+        success: false,
+        message: "Wrong OTP, try again.",
+      });
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Wrong OTP, try again.",
+      });
+    }
+
+    const resetRecord = await PasswordReset.findOne({
+      user: user._id,
+      channel: "email",
+      usedAt: null,
+    });
+
+    if (
+      !resetRecord ||
+      !resetRecord.otpHash ||
+      !resetRecord.otpExpiresAt ||
+      resetRecord.otpExpiresAt.getTime() <= Date.now()
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Verification code has expired. Request a new one.",
+      });
+    }
+
+    if (resetRecord.attempts >= 5) {
+      return res.status(429).json({
+        success: false,
+        message: "Too many incorrect attempts. Request a new code.",
+      });
+    }
+
+    const submittedHash = hashPasswordResetValue(otp);
+
+    const storedHashBuffer = Buffer.from(
+      resetRecord.otpHash,
+      "hex"
+    );
+
+    const submittedHashBuffer = Buffer.from(
+      submittedHash,
+      "hex"
+    );
+
+    const isValid =
+      storedHashBuffer.length === submittedHashBuffer.length &&
+      crypto.timingSafeEqual(
+        storedHashBuffer,
+        submittedHashBuffer
+      );
+
+    if (!isValid) {
+      resetRecord.attempts += 1;
+      await resetRecord.save();
+
+      return res.status(400).json({
+        success: false,
+        message: "Wrong OTP, try again.",
+      });
+    }
+
+    // Generate a separate, high-entropy reset token.
+    const resetToken = crypto.randomBytes(32).toString("hex");
+
+    resetRecord.otpHash = null;
+    resetRecord.otpExpiresAt = null;
+    resetRecord.resetTokenHash =
+      hashPasswordResetValue(resetToken);
+    resetRecord.resetTokenExpiresAt = new Date(
+      Date.now() + 10 * 60 * 1000
+    );
+    resetRecord.attempts = 0;
+    resetRecord.purgeAt = new Date(
+      Date.now() + 24 * 60 * 60 * 1000
+    );
+
+    await resetRecord.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP verified successfully",
+      resetToken,
+    });
+  } catch (error) {
+    console.error("Verify password reset OTP error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to verify the code",
+    });
+  }
+};
+
+
+// ==========================================================
+// RESET PASSWORD
+// ==========================================================
+
+exports.resetPassword = async (req, res) => {
+  try {
+    const resetToken = String(req.body.resetToken || "").trim();
+    const newPassword = req.body.newPassword;
+
+    if (!resetToken || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Reset token and new password are required",
+      });
+    }
+
+    if (
+      typeof newPassword !== "string" ||
+      newPassword.length < 8
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 8 characters long",
+      });
+    }
+
+    if (newPassword.length > 128) {
+      return res.status(400).json({
+        success: false,
+        message: "Password cannot exceed 128 characters",
+      });
+    }
+
+    const tokenHash = hashPasswordResetValue(resetToken);
+    const now = new Date();
+
+    // Find a valid, unused reset token.
+    const resetRecord = await PasswordReset.findOne({
+      resetTokenHash: tokenHash,
+      resetTokenExpiresAt: { $gt: now },
+      usedAt: null,
+    });
+
+    if (!resetRecord) {
+      return res.status(400).json({
+        success: false,
+        message: "Reset link is invalid or has expired. Please verify again.",
+      });
+    }
+
+    const user = await User.findById(resetRecord.user);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Account not found",
+      });
+    }
+
+    // Atomically consume the token to prevent reuse.
+    const consumedToken = await PasswordReset.findOneAndUpdate(
+      {
+        _id: resetRecord._id,
+        resetTokenHash: tokenHash,
+        resetTokenExpiresAt: { $gt: now },
+        usedAt: null,
+      },
+      {
+        $set: {
+          usedAt: now,
+        },
+        $unset: {
+          resetTokenHash: 1,
+          resetTokenExpiresAt: 1,
+          otpHash: 1,
+          otpExpiresAt: 1,
+        },
+      },
+      { new: true }
+    );
+
+    if (!consumedToken) {
+      return res.status(400).json({
+        success: false,
+        message: "Reset link is invalid or has expired. Please verify again.",
+      });
+    }
+
+    // Save the new password.
+    user.password = await bcrypt.hash(newPassword, 12);
+
+    // Allow Firebase phone users to also use password login.
+    if (!Array.isArray(user.authProviders)) {
+      user.authProviders = [];
+    }
+
+    if (!user.authProviders.includes("password")) {
+      user.authProviders.push("password");
+    }
+
+    await user.save();
+
+    // Revoke all existing sessions for this account.
+    await Session.updateMany(
+      {
+        user: user._id,
+        revokedAt: null,
+      },
+      {
+        $set: {
+          revokedAt: new Date(),
+        },
+      }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Password reset successfully. Please log in again.",
+    });
+  } catch (error) {
+    console.error("Reset password error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to reset password",
+    });
+  }
+};
+
+
+// ==========================================================
+// VERIFY PHONE IDENTITY FOR PASSWORD RECOVERY
+// ==========================================================
+
+exports.verifyPasswordResetPhone = async (req, res) => {
+  try {
+    const { idToken } = req.body;
+
+    if (!idToken || typeof idToken !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "Firebase ID token is required",
+      });
+    }
+
+    // Verify the Firebase token.
+    const decodedToken = await firebaseAuth.verifyIdToken(idToken);
+
+    // Only accept Firebase phone authentication.
+    if (decodedToken.firebase?.sign_in_provider !== "phone") {
+      return res.status(403).json({
+        success: false,
+        message: "Phone verification is required",
+      });
+    }
+
+    const firebaseUid = decodedToken.uid;
+    const verifiedPhone = decodedToken.phone_number;
+
+    if (!verifiedPhone) {
+      return res.status(403).json({
+        success: false,
+        message: "Verified phone number is missing",
+      });
+    }
+
+    // Find the existing MicroBlog account using both
+    // the Firebase identity and verified phone number.
+    const user = await User.findOne({
+      firebaseUid,
+      phoneNumber: verifiedPhone,
+      authProviders: "phone",
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "No eligible MicroBlog account was found for this phone number",
+      });
+    }
+
+    const now = new Date();
+
+    // Create a one-time password reset token.
+    const resetToken = crypto.randomBytes(32).toString("hex");
+
+    const resetTokenHash = hashPasswordResetValue(resetToken);
+
+    let resetRecord = await PasswordReset.findOne({
+      user: user._id,
+    });
+
+    if (!resetRecord) {
+      resetRecord = new PasswordReset({
+        user: user._id,
+        channel: "phone",
+      });
+    }
+
+    resetRecord.channel = "phone";
+    resetRecord.otpHash = null;
+    resetRecord.otpExpiresAt = null;
+    resetRecord.attempts = 0;
+    resetRecord.resetTokenHash = resetTokenHash;
+    resetRecord.resetTokenExpiresAt = new Date(
+      now.getTime() + 10 * 60 * 1000
+    );
+    resetRecord.usedAt = null;
+    resetRecord.purgeAt = new Date(
+      now.getTime() + 24 * 60 * 60 * 1000
+    );
+
+    await resetRecord.save();
+
+    // Do not create a MicroBlog login session here.
+    return res.status(200).json({
+      success: true,
+      message: "Phone verified successfully",
+      resetToken,
+    });
+  } catch (error) {
+    console.error("Phone password recovery error:", error);
+
+    if (
+      error.code === "auth/argument-error" ||
+      error.code === "auth/id-token-expired" ||
+      error.code === "auth/invalid-id-token"
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired Firebase verification",
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to verify phone number",
     });
   }
 };

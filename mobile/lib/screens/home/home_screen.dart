@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 
 import '../../services/api_service.dart';
+import '../../widgets/comments_sheet.dart';
 
 import '../bookmark/bookmark_screen.dart';
 import '../notifications/notifications_screen.dart';
@@ -717,44 +718,20 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    List<dynamic> comments = [];
+    int? latestCount;
 
-    try {
-      final result = await ApiService.getComments(postId: postId);
-
-      if (result['success'] == true) {
-        final raw = result['data']?['comments'];
-
-        if (raw is List) {
-          comments = List<dynamic>.from(raw);
-        }
-      }
-    } catch (error) {
-      debugPrint('Get comments error: $error');
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    final result = await showModalBottomSheet<int?>(
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: _surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (sheetContext) {
-        return _CommentsSheet(
-          comments: comments,
-          postId: postId,
-          surfaceColor: _surface,
-          backgroundColor: _background,
-          textColor: _text,
-          mutedColor: _muted,
-          dividerColor: _divider,
-          composerColor: _composer,
+        return SizedBox(
+          height: MediaQuery.of(sheetContext).size.height * 0.85,
+          child: CommentsSheet(
+            postId: postId,
+            onCountChanged: (count) => latestCount = count,
+          ),
         );
       },
     );
@@ -766,9 +743,11 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    if (result != null) {
+    final newCount = latestCount;
+
+    if (newCount != null) {
       setState(() {
-        _commentCounts[postId] = result;
+        _commentCounts[postId] = newCount;
       });
     }
   }
@@ -2165,15 +2144,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Icon(
                       active ? activeIcon : icon,
                       size: iconSize,
-                      color: active ? _text : _muted,
+                      color: _text,
                       // Slightly bolder strokes.
                       shadows: [
                         Shadow(
-                          color: active ? _text : _muted,
+                          color: _text,
                           offset: const Offset(.5, 0),
                         ),
                         Shadow(
-                          color: active ? _text : _muted,
+                          color: _text,
                           offset: const Offset(-.5, 0),
                         ),
                       ],
@@ -2185,7 +2164,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   label,
                   maxLines: 1,
                   style: TextStyle(
-                    color: active ? _text : _muted,
+                    color: _text,
                     fontSize: 10.5,
                     fontWeight: active ? FontWeight.w800 : FontWeight.w700,
                   ),

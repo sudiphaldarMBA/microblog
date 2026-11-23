@@ -26,6 +26,25 @@ const postSchema = new mongoose.Schema(
   default: '',
 },
 
+    // Multiple media (up to 10 photos / 5 videos per post).
+    images: {
+      type: [String],
+      default: [],
+    },
+
+    videos: {
+      type: [String],
+      default: [],
+    },
+
+    // true = posted from the Shorts screen: shown only in Shorts and
+    // the profile Shorts tab, never in the Home feed.
+    isShort: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+
 viewsCount: {
   type: Number,
   default: 0,

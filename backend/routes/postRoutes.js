@@ -25,6 +25,14 @@ router.post(
   postController.createPost
 );
 
+// Shorts feed (all videos + shorts) or ?userId= for a profile's
+// Shorts tab. Keep before the /:postId routes.
+router.get(
+  '/shorts',
+  authMiddleware,
+  postController.getShorts
+);
+
 // ============================================================
 // USER STATS
 // ============================================================

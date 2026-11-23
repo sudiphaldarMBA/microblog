@@ -231,6 +231,44 @@ class ApiService {
         '${base64Encode(bytes)}';
   }
 
+
+  // ============================================================
+  // DEVICE IDENTIFICATION
+  // ============================================================
+
+  static Map<String, String> _deviceHeaders() {
+    String deviceName;
+    String deviceType;
+
+    if (kIsWeb) {
+      deviceName = 'Web browser';
+      deviceType = 'web';
+    } else if (Platform.isAndroid) {
+      deviceName = 'Android phone';
+      deviceType = 'mobile';
+    } else if (Platform.isIOS) {
+      deviceName = 'iPhone';
+      deviceType = 'mobile';
+    } else if (Platform.isWindows) {
+      deviceName = 'Windows PC';
+      deviceType = 'desktop';
+    } else if (Platform.isMacOS) {
+      deviceName = 'Mac';
+      deviceType = 'desktop';
+    } else if (Platform.isLinux) {
+      deviceName = 'Linux PC';
+      deviceType = 'desktop';
+    } else {
+      deviceName = 'Unknown device';
+      deviceType = 'unknown';
+    }
+
+    return {
+      'X-Device-Name': deviceName,
+      'X-Device-Type': deviceType,
+    };
+  }
+
   // ============================================================
   // AUTH API
   // ============================================================
@@ -244,9 +282,9 @@ class ApiService {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/register'),
       headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
+  'Content-Type': 'application/json',
+  'Accept': 'application/json',
+},
       body: jsonEncode({
         'displayName': displayName?.trim().isNotEmpty == true
             ? displayName!.trim()
@@ -269,9 +307,10 @@ class ApiService {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/login'),
       headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
+  'Content-Type': 'application/json',
+  'Accept': 'application/json',
+  ..._deviceHeaders(),
+},
       body: jsonEncode({'email': email.trim(), 'password': password}),
     );
 
@@ -316,9 +355,10 @@ class ApiService {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/firebase-login'),
       headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
+  'Content-Type': 'application/json',
+  'Accept': 'application/json',
+  ..._deviceHeaders(),
+},
       body: jsonEncode(body),
     );
 
@@ -439,8 +479,14 @@ class ApiService {
     List<String>? videos,
     String? location,
     Map<String, dynamic>? poll,
+    bool isShort = false,
   }) async {
     final body = <String, dynamic>{'content': content.trim()};
+
+    // Posted from the Shorts screen: not shown in the Home feed.
+    if (isShort) {
+      body['isShort'] = true;
+    }
 
     // Multiple media: up to 10 photos and 5 videos per post.
     if (images != null && images.isNotEmpty) {
@@ -481,6 +527,23 @@ class ApiService {
   static Future<Map<String, dynamic>> getPosts() async {
     final response = await http.get(
       Uri.parse('$baseUrl/posts'),
+      headers: await _headers(),
+    );
+
+    await _handleUnauthorized(response);
+
+    return _decode(response);
+  }
+
+  /// Shorts feed. Pass [userId] to get only that user's shorts
+  /// (profile Shorts tab).
+  static Future<Map<String, dynamic>> getShorts({String? userId}) async {
+    final query = (userId != null && userId.isNotEmpty)
+        ? '?userId=$userId'
+        : '';
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/posts/shorts$query'),
       headers: await _headers(),
     );
 
@@ -993,4 +1056,152 @@ class ApiService {
 
     await prefs.remove('token');
   }
+
+
+  // ==========================================
+  // DEVICE SESSION MANAGEMENT
+  // ==========================================
+
+  static Future<Map<String, dynamic>> getSessions() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/auth/sessions'),
+      headers: await _headers(),
+    );
+
+    await _handleUnauthorized(response);
+
+    return _decode(response);
+  }
+
+  static Future<Map<String, dynamic>> revokeSession({
+    required String sessionId,
+  }) async {
+    if (sessionId.trim().isEmpty) {
+      return {
+        'success': false,
+        'message': 'Session ID is required',
+      };
+    }
+
+    final response = await http.delete(
+      Uri.parse(
+        '$baseUrl/auth/sessions/${Uri.encodeComponent(sessionId)}',
+      ),
+      headers: await _headers(),
+    );
+
+    await _handleUnauthorized(response);
+
+    return _decode(response);
+  }
+
+  static Future<Map<String, dynamic>> revokeOtherSessions() async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/auth/sessions'),
+      headers: await _headers(),
+    );
+
+    await _handleUnauthorized(response);
+
+    return _decode(response);
+  }
+
+  
+// ==========================================
+// CHANGE PASSWORD
+// ==========================================
+
+static Future<Map<String, dynamic>> changePassword({
+  required String currentPassword,
+  required String newPassword,
+}) async {
+  final response = await http.put(
+    Uri.parse('$baseUrl/auth/change-password'),
+    headers: await _headers(),
+    body: jsonEncode({
+      'currentPassword': currentPassword,
+      'newPassword': newPassword,
+    }),
+  );
+
+  await _handleUnauthorized(response);
+
+  return _decode(response);
+}
+
+// ==========================================
+// REQUEST PASSWORD RESET OTP
+// ==========================================
+
+static Future<Map<String, dynamic>> requestPasswordReset({
+  required String email,
+}) async {
+  final response = await http.post(
+    Uri.parse('$baseUrl/auth/forgot-password'),
+    headers: await _headers(),
+    body: jsonEncode({
+      'email': email.trim().toLowerCase(),
+    }),
+  );
+
+  return _decode(response);
+}
+
+// ==========================================
+// VERIFY PASSWORD RESET OTP
+// ==========================================
+
+static Future<Map<String, dynamic>> verifyPasswordResetOtp({
+  required String email,
+  required String otp,
+}) async {
+  final response = await http.post(
+    Uri.parse('$baseUrl/auth/verify-reset-otp'),
+    headers: await _headers(),
+    body: jsonEncode({
+      'email': email.trim().toLowerCase(),
+      'otp': otp.trim(),
+    }),
+  );
+
+  return _decode(response);
+}
+
+// ==========================================
+// VERIFY PHONE FOR PASSWORD RECOVERY
+// ==========================================
+
+static Future<Map<String, dynamic>> verifyPasswordResetPhone({
+  required String idToken,
+}) async {
+  final response = await http.post(
+    Uri.parse('$baseUrl/auth/verify-reset-phone'),
+    headers: await _headers(),
+    body: jsonEncode({
+      'idToken': idToken,
+    }),
+  );
+
+  return _decode(response);
+}
+
+// ==========================================
+// RESET PASSWORD
+// ==========================================
+
+static Future<Map<String, dynamic>> resetPassword({
+  required String resetToken,
+  required String newPassword,
+}) async {
+  final response = await http.post(
+    Uri.parse('$baseUrl/auth/reset-password'),
+    headers: await _headers(),
+    body: jsonEncode({
+      'resetToken': resetToken,
+      'newPassword': newPassword,
+    }),
+  );
+
+  return _decode(response);
+ }
 }
