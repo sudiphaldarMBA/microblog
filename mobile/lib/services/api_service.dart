@@ -378,7 +378,9 @@ class ApiService {
 
     return result;
   }
-
+  // ==========================================
+  // GET ACCOUNT VERIFICATION STATUS
+ // ==========================================
   static Future<Map<String, dynamic>> getMe() async {
     final response = await http.get(
       Uri.parse('$baseUrl/auth/me'),
@@ -1204,4 +1206,49 @@ static Future<Map<String, dynamic>> resetPassword({
 
   return _decode(response);
  }
+
+  
+  // ==========================================
+  // VERIFICATION SELFIE
+  // ==========================================
+
+  /// Submits a selfie for manual account verification review.
+  /// Successful submission means PENDING, not VERIFIED.
+  static Future<Map<String, dynamic>> submitVerificationSelfie({
+    required String selfie,
+  }) async {
+    if (selfie.trim().isEmpty) {
+      return {
+        'success': false,
+        'message': 'Selfie is required',
+      };
+    }
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/verify-selfie'),
+      headers: await _headers(),
+      body: jsonEncode({
+        'selfie': selfie,
+      }),
+    );
+
+    await _handleUnauthorized(response);
+
+    return _decode(response);
+  }
+    // ==========================================
+  // GET VERIFICATION STATUS
+  // ==========================================
+
+  /// Retrieves the current account verification status.
+  static Future<Map<String, dynamic>> getVerificationStatus() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/auth/verification-status'),
+      headers: await _headers(),
+    );
+
+    await _handleUnauthorized(response);
+
+    return _decode(response);
+  }
 }

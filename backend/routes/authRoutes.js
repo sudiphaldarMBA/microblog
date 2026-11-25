@@ -112,4 +112,20 @@ router.put(
   authController.updateProfile
 );
 
+// ==========================================
+// ACCOUNT VERIFICATION
+// ==========================================
+
+router.post(
+  "/verify-selfie",
+  authMiddleware,
+  authController.submitVerificationSelfie
+);
+
+router.get(
+  "/verification-status",
+  authMiddleware,
+  authController.getVerificationStatus
+);
+
 module.exports = router;

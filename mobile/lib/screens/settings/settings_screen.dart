@@ -5,6 +5,136 @@ import '../auth/login_screen.dart';
 import '../auth/forgot_password_screen.dart';
 import '../../main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'verification_selfie_screen.dart';
+
+
+// ==================================================================
+// SHARED DESIGN HELPERS
+// Icons / accents are now black (light mode) and white (dark mode).
+// ==================================================================
+
+class _SC {
+  final bool dark;
+  _SC.of(BuildContext context)
+      : dark = Theme.of(context).brightness == Brightness.dark;
+
+  Color get background =>
+      dark ? const Color(0xFF08090B) : const Color(0xFFF7F8FA);
+  Color get surface => dark ? const Color(0xFF15171B) : Colors.white;
+  Color get text => dark ? Colors.white : const Color(0xFF111318);
+  Color get muted => dark ? const Color(0xFF9297A0) : const Color(0xFF737B86);
+  Color get divider => dark ? const Color(0xFF282B31) : const Color(0xFFE6E8EC);
+
+  /// Icons and accents: white in dark mode, black in light mode.
+  Color get icon => dark ? Colors.white : Colors.black;
+
+  /// Text/icon colour used on top of a filled `icon`-coloured button.
+  Color get onIcon => dark ? Colors.black : Colors.white;
+}
+
+void _snack(BuildContext context, String message, {bool error = false}) {
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: error ? Colors.red.shade700 : null,
+        content: Text(message),
+      ),
+    );
+}
+
+void _push(BuildContext context, Widget page) {
+  Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+}
+
+/// One menu row (icon + title + chevron + divider).
+class _MenuRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback onTap;
+
+  const _MenuRow({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _SC.of(context);
+
+    return Container(
+      color: c.surface,
+      child: Column(
+        children: [
+          ListTile(
+            leading: Icon(icon, color: c.icon, size: 22),
+            title: Text(
+              title,
+              style: TextStyle(
+                color: c.text,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            subtitle: subtitle != null
+                ? Text(subtitle!, style: TextStyle(color: c.muted, fontSize: 13))
+                : null,
+            trailing: Icon(
+              CupertinoIcons.chevron_forward,
+              color: c.muted,
+              size: 16,
+            ),
+            onTap: onTap,
+          ),
+          Divider(height: 1, indent: 56, color: c.divider),
+        ],
+      ),
+    );
+  }
+}
+
+/// Reusable page: app bar with back arrow + list of children.
+class _SubPage extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
+
+  const _SubPage({required this.title, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _SC.of(context);
+
+    return Scaffold(
+      backgroundColor: c.background,
+      appBar: AppBar(
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        backgroundColor: c.surface,
+        iconTheme: IconThemeData(color: c.text),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: c.text,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        children: children,
+      ),
+    );
+  }
+}
+
+// ==================================================================
+// LEVEL 1 — MAIN SETTINGS SCREEN
+// ==================================================================
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -14,41 +144,17 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  // ============================================================
-  // DESIGN HELPERS
-  // ============================================================
-
-  bool get _dark => Theme.of(context).brightness == Brightness.dark;
-
-  Color get _background =>
-      _dark ? const Color(0xFF08090B) : const Color(0xFFF7F8FA);
-
-  Color get _surface =>
-      _dark ? const Color(0xFF15171B) : const Color(0xFFFFFFFF);
-
-  Color get _text => _dark ? const Color(0xFFFFFFFF) : const Color(0xFF111318);
-
-  Color get _muted => _dark ? const Color(0xFF9297A0) : const Color(0xFF737B86);
-
-  Color get _divider =>
-      _dark ? const Color(0xFF282B31) : const Color(0xFFE6E8EC);
-
-  static const Color _accent = Color(0xFFF91880);
-
-  // ============================================================
-  // BUILD
-  // ============================================================
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _background,
+    final c = _SC.of(context);
 
+    return Scaffold(
+      backgroundColor: c.background,
       appBar: AppBar(
         automaticallyImplyLeading: false,
         elevation: 0,
         scrolledUnderElevation: 0,
-        backgroundColor: _surface,
+        backgroundColor: c.surface,
         titleSpacing: 20,
         title: Text(
           "Settings",
@@ -56,91 +162,96 @@ class _SettingsScreenState extends State<SettingsScreen> {
             fontSize: 22,
             fontWeight: FontWeight.w800,
             letterSpacing: -0.4,
-            color: _text,
+            color: c.text,
           ),
         ),
       ),
-
       body: SafeArea(
         child: Column(
           children: [
-            // Settings menu
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 children: [
-                  _buildSectionHeader("Account & System Hub"),
+                  _buildSectionHeader(c, "Account & System Hub"),
 
-                  _buildMenuRow(
+                  _MenuRow(
                     icon: CupertinoIcons.settings_solid,
                     title: "Settings and privacy",
-                    onTap: () {
-                      _navigateTo(context, const _SettingsAndPrivacySubmenu());
-                    },
+                    onTap: () => _push(context, const _SettingsAndPrivacyScreen()),
                   ),
 
-                  _buildMenuRow(
+                  _MenuRow(
                     icon: CupertinoIcons.question_circle,
                     title: "Help and support",
-                    onTap: () {
-                      _showComingSoon("Help and support");
-                    },
+                    onTap: () => _push(context, const _HelpAndSupportScreen()),
+                  ),
+
+                  _MenuRow(
+                    icon: CupertinoIcons.doc_text,
+                    title: "Privacy policy",
+                    onTap: () => _push(context, const _PrivacyPolicyScreen()),
+                  ),
+
+                  _MenuRow(
+                    icon: CupertinoIcons.globe,
+                    title: "Languages",
+                    onTap: () => _push(context, const _LanguagesScreen()),
                   ),
                 ],
               ),
             ),
 
-            // Dark Mode section
+            // Dark / Light mode
             Container(
-              color: _surface,
+              color: c.surface,
               child: Column(
                 children: [
+                  Divider(color: c.divider, height: 1),
                   SwitchListTile(
                     secondary: Icon(
-                      _dark
+                      c.dark
                           ? CupertinoIcons.moon_fill
                           : CupertinoIcons.sun_max_fill,
-                      color: _accent,
+                      color: c.icon,
                       size: 22,
                     ),
                     title: Text(
-                      _dark ? 'Dark mode' : 'Light mode',
+                      c.dark ? 'Dark mode' : 'Light mode',
                       style: TextStyle(
-                        color: _text,
+                        color: c.text,
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    value: _dark,
+                    activeThumbColor: c.icon,
+                    activeTrackColor: c.icon.withValues(alpha: 0.35),
+                    value: c.dark,
                     onChanged: (enabled) async {
-                      final selectedTheme = enabled
-                          ? ThemeMode.dark
-                          : ThemeMode.light;
-
-                      themeNotifier.value = selectedTheme;
+                      themeNotifier.value =
+                          enabled ? ThemeMode.dark : ThemeMode.light;
 
                       final prefs = await SharedPreferences.getInstance();
-
                       await prefs.setString(
                         'microblog_theme',
                         enabled ? 'dark' : 'light',
                       );
                     },
                   ),
-                  Divider(color: _divider, height: 1),
+                  Divider(color: c.divider, height: 1),
                 ],
               ),
             ),
 
-            // LOG OUT
+            // Log out
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
               child: OutlinedButton(
                 onPressed: _executeLogout,
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 50),
-                  foregroundColor: _text,
-                  side: BorderSide(color: _divider, width: 1.2),
+                  foregroundColor: c.text,
+                  side: BorderSide(color: c.icon, width: 1.2),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -148,7 +259,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Text(
                   "Log out",
                   style: TextStyle(
-                    color: _text,
+                    color: c.text,
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
@@ -161,17 +272,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // ============================================================
-  // SECTION HEADER
-  // ============================================================
-
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(_SC c, String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 16, 16, 8),
       child: Text(
         title.toUpperCase(),
         style: TextStyle(
-          color: _muted,
+          color: c.muted,
           fontSize: 11.5,
           fontWeight: FontWeight.w800,
           letterSpacing: 0.6,
@@ -180,121 +287,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // ============================================================
-  // MAIN MENU ROW
-  // ============================================================
-
-  Widget _buildMenuRow({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-    String? subtitle,
-  }) {
-    return Container(
-      color: _surface,
-      child: Column(
-        children: [
-          ListTile(
-            leading: Icon(icon, color: _accent, size: 22),
-            title: Text(
-              title,
-              style: TextStyle(
-                color: _text,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            subtitle: subtitle != null
-                ? Text(subtitle, style: TextStyle(color: _muted, fontSize: 13))
-                : null,
-            trailing: Icon(
-              CupertinoIcons.chevron_forward,
-              color: _muted,
-              size: 16,
-            ),
-            onTap: onTap,
-          ),
-          Divider(height: 1, indent: 56, color: _divider),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // NAVIGATION
-  // ============================================================
-
-  void _navigateTo(BuildContext context, Widget target) {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => target));
-  }
-
-  // ============================================================
-  // COMING SOON
-  // ============================================================
-
-  void _showComingSoon(String featureName) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          content: Text("$featureName options will be configurable later"),
-        ),
-      );
-  }
-
-  // ============================================================
-  // LOGOUT
-  // ============================================================
-
   void _executeLogout() {
+    final c = _SC.of(context);
+
     showDialog(
       context: context,
       builder: (dialogCtx) {
         return AlertDialog(
-          backgroundColor: _surface,
+          backgroundColor: c.surface,
           title: Text(
             "Log out",
-            style: TextStyle(color: _text, fontWeight: FontWeight.w700),
+            style: TextStyle(color: c.text, fontWeight: FontWeight.w700),
           ),
           content: Text(
             "Are you sure you want to log out of your MicroBlog profile?",
-            style: TextStyle(color: _muted),
+            style: TextStyle(color: c.muted),
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(dialogCtx);
-              },
-              child: Text("Cancel", style: TextStyle(color: _muted)),
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: Text("Cancel", style: TextStyle(color: c.muted)),
             ),
             TextButton(
               onPressed: () async {
-                // Close the confirmation dialog.
                 Navigator.pop(dialogCtx);
 
                 try {
-                  // Clear the saved authentication token.
                   await ApiService.logout();
 
                   if (!mounted) return;
 
-                  // Remove all previous screens and open Login.
                   Navigator.of(context).pushAndRemoveUntil(
                     MaterialPageRoute(builder: (_) => const LoginScreen()),
                     (route) => false,
                   );
                 } catch (error) {
                   if (!mounted) return;
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Logout failed: $error")),
-                  );
+                  _snack(context, "Logout failed: $error", error: true);
                 }
               },
               child: Text(
                 "Log Out",
-                style: TextStyle(color: _text, fontWeight: FontWeight.w700),
+                style: TextStyle(color: c.text, fontWeight: FontWeight.w700),
               ),
             ),
           ],
@@ -305,540 +339,224 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 // ==================================================================
-// LEVEL 2
-// SETTINGS AND PRIVACY
+// LEVEL 2 — SETTINGS AND PRIVACY
+//   • Manage accounts
+//   • Password and security
 // ==================================================================
 
-class _SettingsAndPrivacySubmenu extends StatelessWidget {
-  const _SettingsAndPrivacySubmenu();
+class _SettingsAndPrivacyScreen extends StatelessWidget {
+  const _SettingsAndPrivacyScreen();
 
   @override
   Widget build(BuildContext context) {
-    final bool dark = Theme.of(context).brightness == Brightness.dark;
-
-    final Color background = dark
-        ? const Color(0xFF08090B)
-        : const Color(0xFFF7F8FA);
-
-    final Color surface = dark ? const Color(0xFF090A0C) : Colors.white;
-
-    final Color text = dark ? Colors.white : const Color(0xFF111111);
-
-    return Scaffold(
-      backgroundColor: background,
-
-      appBar: AppBar(
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        backgroundColor: surface,
-        iconTheme: IconThemeData(color: text),
-        title: Text(
-          "Settings & Privacy",
-          style: TextStyle(
-            color: text,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
+    return _SubPage(
+      title: "Settings & Privacy",
+      children: [
+        _MenuRow(
+          icon: CupertinoIcons.person_2_fill,
+          title: "Manage accounts",
+          onTap: () => _push(context, const _ManageAccountsScreen()),
         ),
-      ),
-
-      body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        children: [
-          _buildSubmenuRow(
-            context,
-            icon: CupertinoIcons.person_crop_circle_fill,
-            title: "Settings",
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const _SettingsDeepSubmenu()),
-              );
-            },
-          ),
-
-          _buildSubmenuRow(
-            context,
-            icon: CupertinoIcons.shield_fill,
-            title: "Privacy Center",
-            onTap: () {
-              _showNotification(context, "Privacy Center Options Coming Later");
-            },
-          ),
-
-          _buildSubmenuRow(
-            context,
-            icon: CupertinoIcons.globe,
-            title: "Language",
-            onTap: () {
-              _showNotification(
-                context,
-                "Language Selection Configuration Later",
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-  }
-
-  Widget _buildSubmenuRow(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
-    final bool dark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      color: dark ? const Color(0xFF090A0C) : Colors.white,
-      child: Column(
-        children: [
-          ListTile(
-            leading: Icon(icon, color: const Color(0xFFF91880), size: 22),
-            title: Text(
-              title,
-              style: TextStyle(
-                color: dark ? Colors.white : const Color(0xFF111111),
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            trailing: Icon(
-              CupertinoIcons.chevron_forward,
-              color: dark ? const Color(0xFF8D939C) : const Color(0xFF69707A),
-              size: 16,
-            ),
-            onTap: onTap,
-          ),
-
-          Divider(
-            height: 1,
-            indent: 56,
-            color: dark ? const Color(0xFF202328) : const Color(0xFFE7E9ED),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showNotification(BuildContext context, String text) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(behavior: SnackBarBehavior.floating, content: Text(text)),
-      );
-  }
-
-// ==================================================================
-// LEVEL 3
-// ACCOUNT SETTINGS
-// ==================================================================
-
-class _SettingsDeepSubmenu extends StatelessWidget {
-  const _SettingsDeepSubmenu();
-
-  @override
-  Widget build(BuildContext context) {
-    final bool dark = Theme.of(context).brightness == Brightness.dark;
-
-    final Color background = dark
-        ? const Color(0xFF050505)
-        : const Color(0xFFF7F8FA);
-
-    final Color surface = dark ? const Color(0xFF090A0C) : Colors.white;
-
-    final Color text = dark ? Colors.white : const Color(0xFF111111);
-
-    return Scaffold(
-      backgroundColor: background,
-
-      appBar: AppBar(
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        backgroundColor: surface,
-        iconTheme: IconThemeData(color: text),
-        title: Text(
-          "Account Settings",
-          style: TextStyle(
-            color: text,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
+        _MenuRow(
+          icon: CupertinoIcons.lock_shield_fill,
+          title: "Password and security",
+          onTap: () => _push(context, const _PasswordAndSecurityScreen()),
         ),
-      ),
-
-      body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        children: [
-          _buildSubmenuRow(
-            context,
-            icon: CupertinoIcons.person_2_fill,
-            title: "Manage accounts",
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const _ManageAccountsSubmenu(),
-                ),
-              );
-            },
-          ),
-
-          _buildSubmenuRow(
-            context,
-            icon: CupertinoIcons.lock_shield_fill,
-            title: "Password and security",
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const _PasswordAndSecuritySubmenu(),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  
-  
-  Widget _buildSubmenuRow(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
-    final bool dark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      color: dark ? const Color(0xFF090A0C) : Colors.white,
-      child: Column(
-        children: [
-          ListTile(
-            leading: Icon(
-              icon,
-              color: const Color(0xFFF91880),
-              size: 22,
-            ),
-            title: Text(
-              title,
-              style: TextStyle(
-                color: dark ? Colors.white : const Color(0xFF111111),
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            trailing: Icon(
-              CupertinoIcons.chevron_forward,
-              color: dark
-                  ? const Color(0xFF8D939C)
-                  : const Color(0xFF69707A),
-              size: 16,
-            ),
-            onTap: onTap,
-          ),
-          Divider(
-            height: 1,
-            indent: 56,
-            color: dark
-                ? const Color(0xFF202328)
-                : const Color(0xFFE7E9ED),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }
 
 // ==================================================================
-// LEVEL 4
-// MANAGE ACCOUNTS
+// LEVEL 3 — MANAGE ACCOUNTS
+//   • Account information
+//   • Deactivation or deletion
+//   • Add another account
 // ==================================================================
 
-class _ManageAccountsSubmenu extends StatelessWidget {
-  const _ManageAccountsSubmenu();
+class _ManageAccountsScreen extends StatelessWidget {
+  const _ManageAccountsScreen();
 
-  
-@override
-Widget build(BuildContext context) {
-  final bool dark =
-      Theme.of(context).brightness == Brightness.dark;
-
-  final Color background = dark
-      ? const Color(0xFF050505)
-      : const Color(0xFFF7F8FA);
-
-  final Color surface =
-      dark ? const Color(0xFF090A0C) : Colors.white;
-
-  final Color text =
-      dark ? Colors.white : const Color(0xFF111111);
-
-  return Scaffold(
-    backgroundColor: background,
-
-    appBar: AppBar(
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      backgroundColor: surface,
-      iconTheme: IconThemeData(color: text),
-      title: Text(
-        "Password & Security",
-        style: TextStyle(
-          color: text,
-          fontWeight: FontWeight.bold,
-          fontSize: 18,
-        ),
-      ),
-    ),
-
-    body: ListView(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+  @override
+  Widget build(BuildContext context) {
+    return _SubPage(
+      title: "Manage accounts",
       children: [
-        _buildSubmenuRow(
-          context,
-          icon: CupertinoIcons.padlock_solid,
-          title: "Change password",
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const _ChangePasswordScreen(),
-              ),
-            );
-          },
+        _MenuRow(
+          icon: CupertinoIcons.person_crop_circle,
+          title: "Account information",
+          onTap: () => _snack(context, "Account information is coming soon"),
         ),
-
-        _buildSubmenuRow(
-          context,
-          icon: CupertinoIcons.camera_viewfinder,
-          title: "Verification selfie",
-          onTap: () {
-            ScaffoldMessenger.of(context)
-              ..hideCurrentSnackBar()
-              ..showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    "Verification selfie setup is coming next.",
-                  ),
-                ),
-              );
-          },
+        _MenuRow(
+          icon: CupertinoIcons.person_crop_circle_badge_xmark,
+          title: "Deactivation or deletion",
+          onTap: () => _push(context, const _DeactivationOrDeletionScreen()),
         ),
+        _MenuRow(
+          icon: CupertinoIcons.person_crop_circle_badge_plus,
+          title: "Add another account",
+          onTap: () => _push(context, const _AddAccountScreen()),
+        ),
+      ],
+    );
+  }
+}
 
-        _buildSubmenuRow(
-          context,
+// ==================================================================
+// LEVEL 3 — PASSWORD AND SECURITY
+//   • Verification
+//   • Where you're logged in
+//   • Change password
+// ==================================================================
+
+class _PasswordAndSecurityScreen extends StatelessWidget {
+  const _PasswordAndSecurityScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return _SubPage(
+      title: "Password & Security",
+      children: [
+        _MenuRow(
+  icon: CupertinoIcons.camera_viewfinder,
+  title: "Verification",
+  subtitle: "Request or manage your verified badge",
+  onTap: () => _push(
+    context,
+    const VerificationSelfieScreen(),
+  ),
+),
+        _MenuRow(
           icon: CupertinoIcons.device_phone_portrait,
           title: "Where you're logged in",
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const _LoggedInDevicesScreen(),
-              ),
-            );
-          },
+          onTap: () => _push(context, const _LoggedInDevicesScreen()),
+        ),
+        _MenuRow(
+          icon: CupertinoIcons.padlock_solid,
+          title: "Change password",
+          onTap: () => _push(context, const _ChangePasswordScreen()),
         ),
       ],
-    ),
-  );
-}
-
-Widget _buildSubmenuRow(
-  BuildContext context, {
-  required IconData icon,
-  required String title,
-  required VoidCallback onTap,
-}) {
-  final bool dark =
-      Theme.of(context).brightness == Brightness.dark;
-
-  return Container(
-    color: dark
-        ? const Color(0xFF090A0C)
-        : Colors.white,
-    child: Column(
-      children: [
-        ListTile(
-          leading: Icon(
-            icon,
-            color: const Color(0xFFF91880),
-            size: 22,
-          ),
-          title: Text(
-            title,
-            style: TextStyle(
-              color: dark
-                  ? Colors.white
-                  : const Color(0xFF111111),
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          trailing: Icon(
-            CupertinoIcons.chevron_forward,
-            color: dark
-                ? const Color(0xFF8D939C)
-                : const Color(0xFF69707A),
-            size: 16,
-          ),
-          onTap: onTap,
-        ),
-
-        Divider(
-          height: 1,
-          indent: 56,
-          color: dark
-              ? const Color(0xFF202328)
-              : const Color(0xFFE7E9ED),
-        ),
-      ],
-    ),
-  );
-}
+    );
+  }
 }
 
 // ==================================================================
-// LEVEL 4
-// PASSWORD AND SECURITY
+// LEVEL 2 — HELP AND SUPPORT
+//   • Report a problem
+//   • Contact us
 // ==================================================================
 
-class _PasswordAndSecuritySubmenu extends StatelessWidget {
-  const _PasswordAndSecuritySubmenu();
+class _HelpAndSupportScreen extends StatelessWidget {
+  const _HelpAndSupportScreen();
 
   @override
   Widget build(BuildContext context) {
-    final bool dark = Theme.of(context).brightness == Brightness.dark;
+    return _SubPage(
+      title: "Help & Support",
+      children: [
+        _MenuRow(
+          icon: CupertinoIcons.exclamationmark_bubble,
+          title: "Report a problem",
+          onTap: () => _snack(context, "Report a problem is coming soon"),
+        ),
+        _MenuRow(
+          icon: CupertinoIcons.mail,
+          title: "Contact us",
+          onTap: () => _snack(context, "Contact us is coming soon"),
+        ),
+      ],
+    );
+  }
+}
 
-    final Color background = dark
-        ? const Color(0xFF050505)
-        : const Color(0xFFF7F8FA);
+// ==================================================================
+// LEVEL 2 — LANGUAGES
+//   • App language
+// ==================================================================
 
-    final Color surface = dark ? const Color(0xFF090A0C) : Colors.white;
+class _LanguagesScreen extends StatelessWidget {
+  const _LanguagesScreen();
 
-    final Color text = dark ? Colors.white : const Color(0xFF111111);
+  @override
+  Widget build(BuildContext context) {
+    return _SubPage(
+      title: "Languages",
+      children: [
+        _MenuRow(
+          icon: CupertinoIcons.textformat,
+          title: "App language",
+          subtitle: "English",
+          onTap: () => _snack(context, "Language selection is coming soon"),
+        ),
+      ],
+    );
+  }
+}
+
+// ==================================================================
+// LEVEL 2 — PRIVACY POLICY
+// ==================================================================
+
+class _PrivacyPolicyScreen extends StatelessWidget {
+  const _PrivacyPolicyScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _SC.of(context);
 
     return Scaffold(
-      backgroundColor: background,
-
+      backgroundColor: c.background,
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0,
-        backgroundColor: surface,
-        iconTheme: IconThemeData(color: text),
+        backgroundColor: c.surface,
+        iconTheme: IconThemeData(color: c.text),
         title: Text(
-          "Password & Security",
+          "MicroBlog Privacy Policy",
           style: TextStyle(
-            color: text,
+            color: c.text,
             fontWeight: FontWeight.bold,
             fontSize: 18,
           ),
         ),
       ),
-
       body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.all(20),
         children: [
-          
-          _buildSubmenuRow(
-            context,
-            icon: CupertinoIcons.padlock_solid,
-            title: "Change password",
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const _ChangePasswordScreen(),
+          SizedBox(
+            height: 48,
+            child: OutlinedButton.icon(
+              onPressed: () => _snack(context, "PDF download is coming soon"),
+              icon: Icon(CupertinoIcons.arrow_down_doc, color: c.icon, size: 20),
+              label: Text(
+                "Download PDF",
+                style: TextStyle(
+                  color: c.text,
+                  fontWeight: FontWeight.w700,
                 ),
-              );
-            },
-          ),
-
-          _buildSubmenuRow(
-            context,
-            icon: CupertinoIcons.camera_viewfinder,
-            title: "Verification selfie",
-            onTap: () {
-              ScaffoldMessenger.of(context)
-                ..hideCurrentSnackBar()
-                ..showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      "Verification selfie setup is coming next.",
-                    ),
-                  ),
-                );
-            },
-          ),
-
-          _buildSubmenuRow(
-            context,
-            icon: CupertinoIcons.device_phone_portrait,
-            title: "Where you're logged in",
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const _LoggedInDevicesScreen(),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: c.icon, width: 1.2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              );
-            },
-          ),
-
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSubmenuRow(
-  BuildContext context, {
-  required IconData icon,
-  required String title,
-  required VoidCallback onTap,
-}) {
-    final bool dark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      color: dark ? const Color(0xFF090A0C) : Colors.white,
-      child: Column(
-        children: [
-          ListTile(
-            leading: Icon(icon, color: const Color(0xFFF91880), size: 22),
-            title: Text(
-              title,
-              style: TextStyle(
-                color: dark ? Colors.white : const Color(0xFF111111),
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
               ),
             ),
-            trailing: Icon(
-              CupertinoIcons.chevron_forward,
-              color: dark ? const Color(0xFF8D939C) : const Color(0xFF69707A),
-              size: 16,
-            ),
-                        onTap: () {
-              if (title == "Where you're logged in") {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const _LoggedInDevicesScreen(),
-                  ),
-                );
-                return;
-              }
-
-              ScaffoldMessenger.of(context)
-                ..hideCurrentSnackBar()
-                ..showSnackBar(
-                  SnackBar(
-                    behavior: SnackBarBehavior.floating,
-                    content: Text("$title configuration view setup later"),
-                  ),
-                );
-            },
           ),
-
-          Divider(
-            height: 1,
-            indent: 56,
-            color: dark ? const Color(0xFF202328) : const Color(0xFFE7E9ED),
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: c.divider),
+            ),
+            child: Text(
+              // TODO: replace with your real privacy policy text.
+              "Privacy policy text will appear here.",
+              style: TextStyle(color: c.muted, fontSize: 14, height: 1.6),
+            ),
           ),
         ],
       ),
@@ -855,32 +573,24 @@ class _DeactivationOrDeletionScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool dark = Theme.of(context).brightness == Brightness.dark;
-
-    final Color background = dark ? const Color(0xFF050505) : Colors.white;
-
-    final Color surface = dark ? const Color(0xFF090A0C) : Colors.white;
-
-    final Color text = dark ? Colors.white : const Color(0xFF111111);
+    final c = _SC.of(context);
 
     return Scaffold(
-      backgroundColor: background,
-
+      backgroundColor: c.background,
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0,
-        backgroundColor: surface,
-        iconTheme: IconThemeData(color: text),
+        backgroundColor: c.surface,
+        iconTheme: IconThemeData(color: c.text),
         title: Text(
-          "Deactivate or Delete",
+          "Deactivation or deletion",
           style: TextStyle(
-            color: text,
+            color: c.text,
             fontSize: 17,
             fontWeight: FontWeight.w700,
           ),
         ),
       ),
-
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -890,9 +600,7 @@ class _DeactivationOrDeletionScreen extends StatelessWidget {
             description:
                 "Temporarily hide your profile content and feed shares from MicroBlog view networks.",
           ),
-
           const SizedBox(height: 16),
-
           _buildActionCard(
             context,
             title: "Delete account",
@@ -911,34 +619,18 @@ class _DeactivationOrDeletionScreen extends StatelessWidget {
     required String description,
     bool isDestructive = false,
   }) {
-    final bool dark = Theme.of(context).brightness == Brightness.dark;
-
-    final Color cardColor = dark
-        ? const Color(0xFF17191C)
-        : const Color(0xFFF1F3F5);
-
-    final Color normalText = dark ? Colors.white : Colors.black;
-
-    final Color muted = dark
-        ? const Color(0xFF8D939C)
-        : const Color(0xFF69707A);
+    final c = _SC.of(context);
 
     return Card(
-      color: cardColor,
+      color: c.surface,
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: c.divider),
+      ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          ScaffoldMessenger.of(context)
-            ..hideCurrentSnackBar()
-            ..showSnackBar(
-              SnackBar(
-                behavior: SnackBarBehavior.floating,
-                content: Text("Initiating $title confirmation flow"),
-              ),
-            );
-        },
+        onTap: () => _snack(context, "Initiating $title confirmation flow"),
         child: Padding(
           padding: const EdgeInsets.all(18),
           child: Column(
@@ -947,17 +639,15 @@ class _DeactivationOrDeletionScreen extends StatelessWidget {
               Text(
                 title,
                 style: TextStyle(
-                  color: isDestructive ? Colors.redAccent : normalText,
+                  color: isDestructive ? Colors.redAccent : c.text,
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-
               const SizedBox(height: 6),
-
               Text(
                 description,
-                style: TextStyle(color: muted, fontSize: 13.5, height: 1.35),
+                style: TextStyle(color: c.muted, fontSize: 13.5, height: 1.35),
               ),
             ],
           ),
@@ -980,7 +670,6 @@ class _AddAccountScreen extends StatefulWidget {
 
 class _AddAccountScreenState extends State<_AddAccountScreen> {
   final TextEditingController _emailController = TextEditingController();
-
   final TextEditingController _passwordController = TextEditingController();
 
   bool _obscurePassword = true;
@@ -992,134 +681,99 @@ class _AddAccountScreenState extends State<_AddAccountScreen> {
     super.dispose();
   }
 
+  InputDecoration _decoration(_SC c, String label, {Widget? suffix}) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: c.muted),
+      suffixIcon: suffix,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: c.divider),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: c.icon, width: 1.5),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final bool dark = Theme.of(context).brightness == Brightness.dark;
-
-    final Color background = dark ? const Color(0xFF050505) : Colors.white;
-
-    final Color surface = dark ? const Color(0xFF090A0C) : Colors.white;
-
-    final Color text = dark ? Colors.white : const Color(0xFF111111);
-
-    final Color muted = dark
-        ? const Color(0xFF8D939C)
-        : const Color(0xFF69707A);
+    final c = _SC.of(context);
 
     return Scaffold(
-      backgroundColor: background,
-
+      backgroundColor: c.background,
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0,
-        backgroundColor: surface,
-        iconTheme: IconThemeData(color: text),
+        backgroundColor: c.surface,
+        iconTheme: IconThemeData(color: c.text),
         title: Text(
-          "Add Account",
+          "Add another account",
           style: TextStyle(
-            color: text,
+            color: c.text,
             fontSize: 17,
             fontWeight: FontWeight.w700,
           ),
         ),
       ),
-
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
               const Spacer(),
-
               Text(
                 "Log in to Another Account",
                 style: TextStyle(
-                  color: text,
+                  color: c.text,
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
                 textAlign: TextAlign.center,
               ),
-
               const SizedBox(height: 24),
-
               TextField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
-                style: TextStyle(color: text),
-                decoration: InputDecoration(
-                  labelText: "Email address or mobile number",
-                  labelStyle: TextStyle(color: muted),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: dark
-                          ? const Color(0xFF30343A)
-                          : const Color(0xFFD7DADF),
-                    ),
-                  ),
-                ),
+                style: TextStyle(color: c.text),
+                cursorColor: c.icon,
+                decoration: _decoration(c, "Email address or mobile number"),
               ),
-
               const SizedBox(height: 16),
-
               TextField(
                 controller: _passwordController,
                 obscureText: _obscurePassword,
-                style: TextStyle(color: text),
-                decoration: InputDecoration(
-                  labelText: "Password",
-                  labelStyle: TextStyle(color: muted),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: dark
-                          ? const Color(0xFF30343A)
-                          : const Color(0xFFD7DADF),
-                    ),
-                  ),
-                  suffixIcon: IconButton(
-                    onPressed: () {
-                      setState(() {
-                        _obscurePassword = !_obscurePassword;
-                      });
-                    },
+                style: TextStyle(color: c.text),
+                cursorColor: c.icon,
+                decoration: _decoration(
+                  c,
+                  "Password",
+                  suffix: IconButton(
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
                     icon: Icon(
                       _obscurePassword
                           ? CupertinoIcons.eye
                           : CupertinoIcons.eye_slash,
-                      color: muted,
+                      color: c.muted,
                     ),
                   ),
                 ),
               ),
-
               const SizedBox(height: 24),
-
               SizedBox(
                 width: double.infinity,
                 height: 48,
                 child: FilledButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context)
-                      ..hideCurrentSnackBar()
-                      ..showSnackBar(
-                        const SnackBar(
-                          behavior: SnackBarBehavior.floating,
-                          content: Text(
-                            "Multiple account login will be connected later",
-                          ),
-                        ),
-                      );
-                  },
+                  onPressed: () => _snack(
+                    context,
+                    "Multiple account login will be connected later",
+                  ),
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFF91880),
+                    backgroundColor: c.icon,
+                    foregroundColor: c.onIcon,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -1130,62 +784,39 @@ class _AddAccountScreenState extends State<_AddAccountScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 14),
-
               TextButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context)
-                    ..hideCurrentSnackBar()
-                    ..showSnackBar(
-                      const SnackBar(
-                        behavior: SnackBarBehavior.floating,
-                        content: Text(
-                          "Password recovery will be configured later",
-                        ),
-                      ),
-                    );
-                },
-                child: const Text(
+                onPressed: () =>
+                    _snack(context, "Password recovery will be configured later"),
+                child: Text(
                   "Forgotten password?",
-                  style: TextStyle(color: Color(0xFF1D9BF0)),
+                  style: TextStyle(color: c.muted),
                 ),
               ),
-
               const Spacer(),
-
               SizedBox(
                 width: double.infinity,
                 height: 48,
                 child: OutlinedButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context)
-                      ..hideCurrentSnackBar()
-                      ..showSnackBar(
-                        const SnackBar(
-                          behavior: SnackBarBehavior.floating,
-                          content: Text(
-                            "Account creation will be connected later",
-                          ),
-                        ),
-                      );
-                  },
+                  onPressed: () => _snack(
+                    context,
+                    "Account creation will be connected later",
+                  ),
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFF1D9BF0)),
+                    side: BorderSide(color: c.icon),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
+                  child: Text(
                     "Create new account",
                     style: TextStyle(
-                      color: Color(0xFF1D9BF0),
+                      color: c.text,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
               ),
-
               const SizedBox(height: 12),
             ],
           ),
@@ -1195,42 +826,23 @@ class _AddAccountScreenState extends State<_AddAccountScreen> {
   }
 }
 
+// ==================================================================
+// WHERE YOU'RE LOGGED IN
+// ==================================================================
 
 class _LoggedInDevicesScreen extends StatefulWidget {
   const _LoggedInDevicesScreen();
 
   @override
-  State<_LoggedInDevicesScreen> createState() =>
-      _LoggedInDevicesScreenState();
+  State<_LoggedInDevicesScreen> createState() => _LoggedInDevicesScreenState();
 }
 
-class _LoggedInDevicesScreenState
-    extends State<_LoggedInDevicesScreen> {
+class _LoggedInDevicesScreenState extends State<_LoggedInDevicesScreen> {
   bool _loading = true;
   bool _processing = false;
 
   String? _error;
   List<Map<String, dynamic>> _sessions = [];
-
-  bool get _dark =>
-      Theme.of(context).brightness == Brightness.dark;
-
-  Color get _background =>
-      _dark ? const Color(0xFF08090B) : const Color(0xFFF7F8FA);
-
-  Color get _surface =>
-      _dark ? const Color(0xFF15171B) : Colors.white;
-
-  Color get _text =>
-      _dark ? Colors.white : const Color(0xFF111318);
-
-  Color get _muted =>
-      _dark ? const Color(0xFF9297A0) : const Color(0xFF737B86);
-
-  Color get _divider =>
-      _dark ? const Color(0xFF282B31) : const Color(0xFFE6E8EC);
-
-  static const Color _accent = Color(0xFFF91880);
 
   @override
   void initState() {
@@ -1250,16 +862,11 @@ class _LoggedInDevicesScreenState
       final response = await ApiService.getSessions();
 
       if (response['success'] != true) {
-        throw Exception(
-          response['message'] ?? 'Unable to load login sessions',
-        );
+        throw Exception(response['message'] ?? 'Unable to load login sessions');
       }
 
       final data = response['data'];
-
-      final rawSessions = data is Map
-          ? data['sessions']
-          : null;
+      final rawSessions = data is Map ? data['sessions'] : null;
 
       final sessions = rawSessions is List
           ? rawSessions
@@ -1284,133 +891,89 @@ class _LoggedInDevicesScreenState
     }
   }
 
-  Future<void> _revokeSession(
-    Map<String, dynamic> session,
-  ) async {
-    final sessionId = session['sessionId']?.toString() ?? '';
-
-    if (sessionId.isEmpty || _processing) return;
+  Future<bool> _confirm({
+    required String title,
+    required String message,
+    required String action,
+  }) async {
+    final c = _SC.of(context);
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: _surface,
-        title: Text(
-          'Sign out this device?',
-          style: TextStyle(color: _text),
-        ),
-        content: Text(
-          'This device will no longer be able to access your account.',
-          style: TextStyle(color: _muted),
-        ),
+        backgroundColor: c.surface,
+        title: Text(title, style: TextStyle(color: c.text)),
+        content: Text(message, style: TextStyle(color: c.muted)),
         actions: [
           TextButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, false),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: _muted),
-            ),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text('Cancel', style: TextStyle(color: c.muted)),
           ),
           TextButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, true),
-            child: const Text(
-              'Sign out',
-              style: TextStyle(color: _accent),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(
+              action,
+              style: TextStyle(color: c.text, fontWeight: FontWeight.w700),
             ),
           ),
         ],
       ),
     );
 
-    if (confirmed != true || !mounted) return;
+    return confirmed == true;
+  }
+
+  Future<void> _revokeSession(Map<String, dynamic> session) async {
+    final sessionId = session['sessionId']?.toString() ?? '';
+
+    if (sessionId.isEmpty || _processing) return;
+
+    final ok = await _confirm(
+      title: 'Sign out this device?',
+      message: 'This device will no longer be able to access your account.',
+      action: 'Sign out',
+    );
+
+    if (!ok || !mounted) return;
 
     setState(() => _processing = true);
 
     try {
-      final response = await ApiService.revokeSession(
-        sessionId: sessionId,
-      );
+      final response = await ApiService.revokeSession(sessionId: sessionId);
 
       if (response['success'] != true) {
-        throw Exception(
-          response['message'] ?? 'Unable to sign out device',
-        );
+        throw Exception(response['message'] ?? 'Unable to sign out device');
       }
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Device signed out successfully'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-
+      _snack(context, 'Device signed out successfully');
       await _loadSessions();
     } catch (error) {
       if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            error.toString().replaceFirst('Exception: ', ''),
-          ),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      _snack(context, error.toString().replaceFirst('Exception: ', ''),
+          error: true);
     } finally {
-      if (mounted) {
-        setState(() => _processing = false);
-      }
+      if (mounted) setState(() => _processing = false);
     }
   }
 
   Future<void> _revokeOtherSessions() async {
     if (_processing) return;
 
-    final otherSessions = _sessions
-        .where((session) => session['isCurrent'] != true)
-        .length;
+    final otherSessions =
+        _sessions.where((session) => session['isCurrent'] != true).length;
 
     if (otherSessions == 0) return;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: _surface,
-        title: Text(
-          'Log out of other devices?',
-          style: TextStyle(color: _text),
-        ),
-        content: Text(
-          'You will be signed out of $otherSessions other '
+    final ok = await _confirm(
+      title: 'Log out of other devices?',
+      message: 'You will be signed out of $otherSessions other '
           'device(s). Your current device will remain logged in.',
-          style: TextStyle(color: _muted),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, false),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: _muted),
-            ),
-          ),
-          TextButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, true),
-            child: const Text(
-              'Log out',
-              style: TextStyle(color: _accent),
-            ),
-          ),
-        ],
-      ),
+      action: 'Log out',
     );
 
-    if (confirmed != true || !mounted) return;
+    if (!ok || !mounted) return;
 
     setState(() => _processing = true);
 
@@ -1419,41 +982,23 @@ class _LoggedInDevicesScreenState
 
       if (response['success'] != true) {
         throw Exception(
-          response['message'] ??
-              'Unable to log out other devices',
+          response['message'] ?? 'Unable to log out other devices',
         );
       }
 
       if (!mounted) return;
 
       final data = response['data'];
-      final count = data is Map
-          ? data['revokedCount'] ?? 0
-          : 0;
+      final count = data is Map ? data['revokedCount'] ?? 0 : 0;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('$count other device(s) signed out'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-
+      _snack(context, '$count other device(s) signed out');
       await _loadSessions();
     } catch (error) {
       if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            error.toString().replaceFirst('Exception: ', ''),
-          ),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      _snack(context, error.toString().replaceFirst('Exception: ', ''),
+          error: true);
     } finally {
-      if (mounted) {
-        setState(() => _processing = false);
-      }
+      if (mounted) setState(() => _processing = false);
     }
   }
 
@@ -1504,24 +1049,20 @@ class _LoggedInDevicesScreenState
         '${local.year}';
   }
 
-  Widget _buildSessionCard(
-    Map<String, dynamic> session,
-  ) {
+  Widget _buildSessionCard(Map<String, dynamic> session) {
+    final c = _SC.of(context);
+
     final isCurrent = session['isCurrent'] == true;
-
-    final deviceName =
-        session['deviceName']?.toString().trim();
-
-    final deviceType =
-        session['deviceType']?.toString() ?? 'unknown';
+    final deviceName = session['deviceName']?.toString().trim();
+    final deviceType = session['deviceType']?.toString() ?? 'unknown';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _surface,
+        color: c.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _divider),
+        border: Border.all(color: c.divider),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1530,18 +1071,12 @@ class _LoggedInDevicesScreenState
             height: 48,
             width: 48,
             decoration: BoxDecoration(
-              color: _accent.withValues(alpha: 0.10),
+              color: c.icon.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(13),
             ),
-            child: Icon(
-              _deviceIcon(deviceType),
-              color: _accent,
-              size: 24,
-            ),
+            child: Icon(_deviceIcon(deviceType), color: c.icon, size: 24),
           ),
-
           const SizedBox(width: 13),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1551,33 +1086,21 @@ class _LoggedInDevicesScreenState
                       ? 'Unknown device'
                       : deviceName,
                   style: TextStyle(
-                    color: _text,
+                    color: c.text,
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-
                 const SizedBox(height: 5),
-
                 Text(
-                  deviceType[0].toUpperCase() +
-                      deviceType.substring(1),
-                  style: TextStyle(
-                    color: _muted,
-                    fontSize: 13,
-                  ),
+                  deviceType[0].toUpperCase() + deviceType.substring(1),
+                  style: TextStyle(color: c.muted, fontSize: 13),
                 ),
-
                 const SizedBox(height: 8),
-
                 Text(
                   'Last active: ${_formatDate(session['lastActiveAt'])}',
-                  style: TextStyle(
-                    color: _muted,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: c.muted, fontSize: 12),
                 ),
-
                 if (isCurrent) ...[
                   const SizedBox(height: 10),
                   Container(
@@ -1586,13 +1109,13 @@ class _LoggedInDevicesScreenState
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: _accent.withValues(alpha: 0.10),
+                      color: c.icon.withValues(alpha: 0.10),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Text(
+                    child: Text(
                       'CURRENT DEVICE',
                       style: TextStyle(
-                        color: _accent,
+                        color: c.text,
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 0.5,
@@ -1603,16 +1126,13 @@ class _LoggedInDevicesScreenState
               ],
             ),
           ),
-
           if (!isCurrent)
             TextButton(
-              onPressed: _processing
-                  ? null
-                  : () => _revokeSession(session),
-              child: const Text(
+              onPressed: _processing ? null : () => _revokeSession(session),
+              child: Text(
                 'Sign out',
                 style: TextStyle(
-                  color: _accent,
+                  color: c.text,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
@@ -1625,44 +1145,35 @@ class _LoggedInDevicesScreenState
 
   @override
   Widget build(BuildContext context) {
-    final otherSessions = _sessions
-        .where((session) => session['isCurrent'] != true)
-        .length;
+    final c = _SC.of(context);
+
+    final otherSessions =
+        _sessions.where((session) => session['isCurrent'] != true).length;
 
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: c.background,
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0,
-        backgroundColor: _surface,
-        iconTheme: IconThemeData(color: _text),
+        backgroundColor: c.surface,
+        iconTheme: IconThemeData(color: c.text),
         title: Text(
           "Where you're logged in",
           style: TextStyle(
-            color: _text,
+            color: c.text,
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
         ),
         actions: [
           IconButton(
-            onPressed: _loading || _processing
-                ? null
-                : _loadSessions,
-            icon: Icon(
-              CupertinoIcons.refresh,
-              color: _text,
-            ),
+            onPressed: _loading || _processing ? null : _loadSessions,
+            icon: Icon(CupertinoIcons.refresh, color: c.text),
           ),
         ],
       ),
-
       body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(
-                color: _accent,
-              ),
-            )
+          ? Center(child: CircularProgressIndicator(color: c.icon))
           : _error != null
               ? Center(
                   child: Padding(
@@ -1672,21 +1183,21 @@ class _LoggedInDevicesScreenState
                       children: [
                         Icon(
                           CupertinoIcons.exclamationmark_circle,
-                          color: _accent,
+                          color: c.icon,
                           size: 42,
                         ),
                         const SizedBox(height: 12),
                         Text(
                           _error!,
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: _text),
+                          style: TextStyle(color: c.text),
                         ),
                         const SizedBox(height: 16),
                         ElevatedButton(
                           onPressed: _loadSessions,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: _accent,
-                            foregroundColor: Colors.white,
+                            backgroundColor: c.icon,
+                            foregroundColor: c.onIcon,
                           ),
                           child: const Text('Try again'),
                         ),
@@ -1695,7 +1206,7 @@ class _LoggedInDevicesScreenState
                   ),
                 )
               : RefreshIndicator(
-                  color: _accent,
+                  color: c.icon,
                   onRefresh: _loadSessions,
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
@@ -1704,85 +1215,68 @@ class _LoggedInDevicesScreenState
                       Text(
                         'Your login activity',
                         style: TextStyle(
-                          color: _text,
+                          color: c.text,
                           fontSize: 19,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-
                       const SizedBox(height: 7),
-
                       Text(
                         'These are the devices currently signed '
                         'in to your MicroBlog account.',
                         style: TextStyle(
-                          color: _muted,
+                          color: c.muted,
                           fontSize: 13,
                           height: 1.5,
                         ),
                       ),
-
                       const SizedBox(height: 22),
-
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'ACTIVE DEVICES (${_sessions.length})',
-                              style: TextStyle(
-                                color: _muted,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.8,
-                              ),
-                            ),
-                          ),
-                        ],
+                      Text(
+                        'ACTIVE DEVICES (${_sessions.length})',
+                        style: TextStyle(
+                          color: c.muted,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                        ),
                       ),
-
                       const SizedBox(height: 13),
-
                       if (_sessions.isEmpty)
                         Container(
                           padding: const EdgeInsets.all(22),
                           decoration: BoxDecoration(
-                            color: _surface,
+                            color: c.surface,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: _divider),
+                            border: Border.all(color: c.divider),
                           ),
                           child: Text(
                             'No active login sessions found.',
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: _muted),
+                            style: TextStyle(color: c.muted),
                           ),
                         )
                       else
                         ..._sessions.map(_buildSessionCard),
-
                       if (otherSessions > 0) ...[
                         const SizedBox(height: 18),
-
                         SizedBox(
                           width: double.infinity,
                           child: OutlinedButton.icon(
-                            onPressed: _processing
-                                ? null
-                                : _revokeOtherSessions,
-                            icon: const Icon(
+                            onPressed:
+                                _processing ? null : _revokeOtherSessions,
+                            icon: Icon(
                               CupertinoIcons.square_arrow_right,
                               size: 18,
+                              color: c.icon,
                             ),
-                            label: const Text(
+                            label: Text(
                               'Log out of all other devices',
+                              style: TextStyle(color: c.text),
                             ),
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: _accent,
-                              side: const BorderSide(
-                                color: _accent,
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 15,
-                              ),
+                              side: BorderSide(color: c.icon),
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 15),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
@@ -1790,15 +1284,13 @@ class _LoggedInDevicesScreenState
                           ),
                         ),
                       ],
-
                       const SizedBox(height: 20),
-
                       Text(
                         'If you see a device you do not recognize, '
                         'sign it out and consider changing your password.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: _muted,
+                          color: c.muted,
                           fontSize: 12,
                           height: 1.5,
                         ),
@@ -1810,17 +1302,18 @@ class _LoggedInDevicesScreenState
   }
 }
 
+// ==================================================================
+// CHANGE PASSWORD
+// ==================================================================
 
 class _ChangePasswordScreen extends StatefulWidget {
-  const _ChangePasswordScreen({super.key});
+  const _ChangePasswordScreen();
 
   @override
-  State<_ChangePasswordScreen> createState() =>
-      _ChangePasswordScreenState();
+  State<_ChangePasswordScreen> createState() => _ChangePasswordScreenState();
 }
 
-class _ChangePasswordScreenState
-    extends State<_ChangePasswordScreen> {
+class _ChangePasswordScreenState extends State<_ChangePasswordScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _currentPasswordController = TextEditingController();
@@ -1832,46 +1325,12 @@ class _ChangePasswordScreenState
   bool _showConfirmPassword = false;
   bool _isLoading = false;
 
-  static const Color _accent = Color(0xFFF91880);
-
-  bool get _dark =>
-      Theme.of(context).brightness == Brightness.dark;
-
-  Color get _background =>
-      _dark ? const Color(0xFF08090B) : const Color(0xFFF7F8FA);
-
-  Color get _surface =>
-      _dark ? const Color(0xFF15171B) : Colors.white;
-
-  Color get _text =>
-      _dark ? Colors.white : const Color(0xFF111318);
-
-  Color get _muted =>
-      _dark ? const Color(0xFF9297A0) : const Color(0xFF737B86);
-
-  Color get _border =>
-      _dark ? const Color(0xFF282B31) : const Color(0xFFE6E8EC);
-
   @override
   void dispose() {
     _currentPasswordController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
-  }
-
-  void _showMessage(String message, {bool error = false}) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: error ? Colors.red.shade700 : _accent,
-          content: Text(message),
-        ),
-      );
   }
 
   Future<void> _changePassword() async {
@@ -1890,9 +1349,9 @@ class _ChangePasswordScreenState
       if (!mounted) return;
 
       if (result['success'] == true) {
-        _showMessage(
-          result['message']?.toString() ??
-              'Password changed successfully.',
+        _snack(
+          context,
+          result['message']?.toString() ?? 'Password changed successfully.',
         );
 
         _currentPasswordController.clear();
@@ -1901,25 +1360,23 @@ class _ChangePasswordScreenState
 
         Navigator.of(context).pop();
       } else {
-        _showMessage(
-          result['message']?.toString() ??
-              'Unable to change password.',
+        _snack(
+          context,
+          result['message']?.toString() ?? 'Unable to change password.',
           error: true,
         );
       }
     } catch (error) {
-      _showMessage(
-        'Unable to change password. Please try again.',
-        error: true,
-      );
+      if (!mounted) return;
+      _snack(context, 'Unable to change password. Please try again.',
+          error: true);
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Widget _buildPasswordField({
+    required _SC c,
     required String label,
     required String hint,
     required TextEditingController controller,
@@ -1933,7 +1390,7 @@ class _ChangePasswordScreenState
         Text(
           label,
           style: TextStyle(
-            color: _text,
+            color: c.text,
             fontSize: 14,
             fontWeight: FontWeight.w700,
           ),
@@ -1942,16 +1399,14 @@ class _ChangePasswordScreenState
         TextFormField(
           controller: controller,
           obscureText: !visible,
-          style: TextStyle(
-            color: _text,
-            fontSize: 15,
-          ),
+          cursorColor: c.icon,
+          style: TextStyle(color: c.text, fontSize: 15),
           validator: validator,
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: TextStyle(color: _muted),
+            hintStyle: TextStyle(color: c.muted),
             filled: true,
-            fillColor: _surface,
+            fillColor: c.surface,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 17,
@@ -1959,23 +1414,18 @@ class _ChangePasswordScreenState
             suffixIcon: IconButton(
               onPressed: onVisibilityChanged,
               icon: Icon(
-                visible
-                    ? CupertinoIcons.eye_slash
-                    : CupertinoIcons.eye,
-                color: _muted,
+                visible ? CupertinoIcons.eye_slash : CupertinoIcons.eye,
+                color: c.muted,
                 size: 20,
               ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(13),
-              borderSide: BorderSide(color: _border),
+              borderSide: BorderSide(color: c.divider),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(13),
-              borderSide: const BorderSide(
-                color: _accent,
-                width: 1.5,
-              ),
+              borderSide: BorderSide(color: c.icon, width: 1.5),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(13),
@@ -1983,10 +1433,7 @@ class _ChangePasswordScreenState
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(13),
-              borderSide: const BorderSide(
-                color: Colors.red,
-                width: 1.5,
-              ),
+              borderSide: const BorderSide(color: Colors.red, width: 1.5),
             ),
           ),
         ),
@@ -1996,17 +1443,19 @@ class _ChangePasswordScreenState
 
   @override
   Widget build(BuildContext context) {
+    final c = _SC.of(context);
+
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: c.background,
       appBar: AppBar(
         elevation: 0,
         scrolledUnderElevation: 0,
-        backgroundColor: _surface,
-        iconTheme: IconThemeData(color: _text),
+        backgroundColor: c.surface,
+        iconTheme: IconThemeData(color: c.text),
         title: Text(
           'Change password',
           style: TextStyle(
-            color: _text,
+            color: c.text,
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
@@ -2023,85 +1472,69 @@ class _ChangePasswordScreenState
                   width: 68,
                   height: 68,
                   decoration: BoxDecoration(
-                    color: _accent.withValues(alpha: 0.12),
+                    color: c.icon.withValues(alpha: 0.08),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child: Icon(
                     CupertinoIcons.lock_shield_fill,
-                    color: _accent,
+                    color: c.icon,
                     size: 31,
                   ),
                 ),
               ),
-
               const SizedBox(height: 20),
-
               Text(
                 'Keep your account secure',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: _text,
+                  color: c.text,
                   fontSize: 21,
                   fontWeight: FontWeight.w800,
                 ),
               ),
-
               const SizedBox(height: 8),
-
               Text(
                 'Choose a strong password that you do not use '
                 'on other websites or apps.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: _muted,
-                  fontSize: 13,
-                  height: 1.5,
-                ),
+                style: TextStyle(color: c.muted, fontSize: 13, height: 1.5),
               ),
-
               const SizedBox(height: 30),
 
               _buildPasswordField(
+                c: c,
                 label: 'Current password',
                 hint: 'Enter your current password',
                 controller: _currentPasswordController,
                 visible: _showCurrentPassword,
-                onVisibilityChanged: () {
-                  setState(() {
-                    _showCurrentPassword = !_showCurrentPassword;
-                  });
-                },
+                onVisibilityChanged: () => setState(
+                  () => _showCurrentPassword = !_showCurrentPassword,
+                ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'Enter your current password';
                   }
                   return null;
                 },
-              
-                 ),
+              ),
 
               const SizedBox(height: 10),
 
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
-                  onPressed: () {
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => const ForgotPasswordScreen(),
-    ),
-  );
-},
+                  onPressed: () => _push(context, const ForgotPasswordScreen()),
                   style: TextButton.styleFrom(
-                    foregroundColor: _accent,
+                    foregroundColor: c.text,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 4,
                       vertical: 6,
                     ),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Forgot password?',
                     style: TextStyle(
+                      color: c.text,
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),
@@ -2112,32 +1545,26 @@ class _ChangePasswordScreenState
               const SizedBox(height: 10),
 
               _buildPasswordField(
+                c: c,
                 label: 'New password',
                 hint: 'Enter your new password',
                 controller: _newPasswordController,
                 visible: _showNewPassword,
-                onVisibilityChanged: () {
-                  setState(() {
-                    _showNewPassword = !_showNewPassword;
-                  });
-                },
+                onVisibilityChanged: () =>
+                    setState(() => _showNewPassword = !_showNewPassword),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'Enter a new password';
                   }
-
                   if (value.length < 8) {
                     return 'Password must contain at least 8 characters';
                   }
-
                   if (value.length > 128) {
                     return 'Password must not exceed 128 characters';
                   }
-
                   if (value == _currentPasswordController.text) {
                     return 'New password must differ from current password';
                   }
-
                   return null;
                 },
               ),
@@ -2145,24 +1572,21 @@ class _ChangePasswordScreenState
               const SizedBox(height: 20),
 
               _buildPasswordField(
+                c: c,
                 label: 'Confirm new password',
                 hint: 'Re-enter your new password',
                 controller: _confirmPasswordController,
                 visible: _showConfirmPassword,
-                onVisibilityChanged: () {
-                  setState(() {
-                    _showConfirmPassword = !_showConfirmPassword;
-                  });
-                },
+                onVisibilityChanged: () => setState(
+                  () => _showConfirmPassword = !_showConfirmPassword,
+                ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'Confirm your new password';
                   }
-
                   if (value != _newPasswordController.text) {
                     return 'Passwords do not match';
                   }
-
                   return null;
                 },
               ),
@@ -2171,10 +1595,7 @@ class _ChangePasswordScreenState
 
               Text(
                 'Your password must be at least 8 characters long.',
-                style: TextStyle(
-                  color: _muted,
-                  fontSize: 12,
-                ),
+                style: TextStyle(color: c.muted, fontSize: 12),
               ),
 
               const SizedBox(height: 30),
@@ -2184,22 +1605,21 @@ class _ChangePasswordScreenState
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _changePassword,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _accent,
-                    disabledBackgroundColor:
-                        _accent.withValues(alpha: 0.5),
-                    foregroundColor: Colors.white,
+                    backgroundColor: c.icon,
+                    disabledBackgroundColor: c.icon.withValues(alpha: 0.4),
+                    foregroundColor: c.onIcon,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(13),
                     ),
                   ),
                   child: _isLoading
-                      ? const SizedBox(
+                      ? SizedBox(
                           height: 22,
                           width: 22,
                           child: CircularProgressIndicator(
                             strokeWidth: 2.3,
-                            color: Colors.white,
+                            color: c.onIcon,
                           ),
                         )
                       : const Text(

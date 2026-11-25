@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -5,17 +6,34 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/api_service.dart';
 import '../../widgets/comments_sheet.dart';
 import '../home/home_video_player.dart';
+import '../settings/verification_selfie_screen.dart';
 import 'edit_profile_screen.dart';
 import 'follow_list_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  static const String _cacheKey = 'microblog_cached_profile';
+
+  /// Last loaded own profile, kept in memory so the name shows instantly.
+  static Map<String, dynamic>? _cachedUser;
+
+  /// Call this on logout so the next account never sees the old name.
+  static Future<void> clearCache() async {
+    _cachedUser = null;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_cacheKey);
+    } catch (_) {}
+  }
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -31,6 +49,9 @@ class _ProfileScreenState extends State<ProfileScreen>
   static const Color _linkColor = Color(0xFF2563EB);
 
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+
+  /// Icons: black in light mode, white in dark mode.
+  Color get _iconColor => _isDark ? Colors.white : Colors.black;
 
   Color get _background =>
       _isDark ? const Color(0xFF08090B) : const Color(0xFFF7F8FA);
@@ -116,6 +137,15 @@ class _ProfileScreenState extends State<ProfileScreen>
       _loadPostsIfNeeded();
     });
 
+    // Show the last known profile immediately (no "User" flash).
+    final cached = ProfileScreen._cachedUser;
+
+    if (cached != null) {
+      _applyCachedUser(cached);
+    } else {
+      _restoreCachedUser();
+    }
+
     _loadProfile();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -190,6 +220,64 @@ class _ProfileScreenState extends State<ProfileScreen>
   // LOAD PROFILE
   // ============================================================
 
+  void _applyCachedUser(Map<String, dynamic> cached) {
+    _user = Map<String, dynamic>.from(cached);
+
+    _followersCount = _readCount(
+      _user?['followersCount'],
+      _user?['followers'],
+    );
+
+    _followingCount = _readCount(
+      _user?['followingCount'],
+      _user?['following'],
+    );
+
+    _isLoading = false;
+  }
+
+  /// Cold start: restore the saved profile from disk.
+  Future<void> _restoreCachedUser() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(ProfileScreen._cacheKey);
+
+      if (raw == null || raw.isEmpty) return;
+
+      final decoded = jsonDecode(raw);
+
+      if (decoded is! Map) return;
+
+      final map = Map<String, dynamic>.from(decoded);
+
+      ProfileScreen._cachedUser = map;
+
+      // Only use it if the network load has not already finished.
+      if (!mounted || _user != null) return;
+
+      setState(() => _applyCachedUser(map));
+    } catch (error) {
+      debugPrint('Restore cached profile error: $error');
+    }
+  }
+
+  Future<void> _saveCachedUser(Map<String, dynamic> user) async {
+    ProfileScreen._cachedUser = user;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Avatar / cover can be large data URLs, so store light fields only.
+      final light = Map<String, dynamic>.from(user)
+        ..remove('avatar')
+        ..remove('coverPhoto');
+
+      await prefs.setString(ProfileScreen._cacheKey, jsonEncode(light));
+    } catch (error) {
+      debugPrint('Save cached profile error: $error');
+    }
+  }
+
   Future<void> _loadProfile() async {
     if (mounted && _user == null) {
       setState(() {
@@ -225,6 +313,10 @@ class _ProfileScreenState extends State<ProfileScreen>
 
         _isLoading = false;
       });
+
+      if (user != null) {
+        _saveCachedUser(user);
+      }
     } catch (error) {
       debugPrint('Load Profile Error: $error');
 
@@ -2427,31 +2519,37 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
               ),
 
-              // Smaller, thinner edit button.
+              // "Get verified" (only when unverified) + pencil-only edit button.
               Positioned(
                 right: 16,
                 top: 170 + 10,
-                child: OutlinedButton.icon(
-                  onPressed: _openEditProfile,
-                  icon: _boldIcon(Icons.edit_outlined, 16, _accent),
-                  label: Text(
-                    'Edit profile',
-                    style: TextStyle(
-                      color: _text,
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w800,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!_isVerified && _user != null) ...[
+                      _getVerifiedButton(),
+                      const SizedBox(width: 8),
+                    ],
+                    SizedBox(
+                      width: 36,
+                      height: 32,
+                      child: OutlinedButton(
+                        onPressed: _openEditProfile,
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(
+                            color: _iconColor.withOpacity(_isDark ? .45 : .35),
+                            width: 1.9,
+                          ),
+                          padding: EdgeInsets.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                        ),
+                        child: _boldIcon(Icons.edit_outlined, 17, _iconColor),
+                      ),
                     ),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _text,
-                    side: BorderSide(color: _divider, width: 1.4),
-                    minimumSize: const Size(0, 32),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                  ),
+                  ],
                 ),
               ),
             ],
@@ -2469,12 +2567,11 @@ class _ProfileScreenState extends State<ProfileScreen>
                 // NAME + USERNAME
                 // ----------------------------------------------
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Flexible(
                       child: Text(
-                        _displayName,
+                        _user == null ? '' : _displayName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -2485,6 +2582,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                         ),
                       ),
                     ),
+                    if (_isVerified) ...[
+                      const SizedBox(width: 6),
+                      _verifiedBadge(),
+                    ],
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
@@ -2542,21 +2643,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 // ----------------------------------------------
                 const SizedBox(height: 14),
 
-                Row(
-                  children: [
-                    _countText(
-                      _followingCount,
-                      'Following',
-                      () => _openConnections(followers: false),
-                    ),
-                    const SizedBox(width: 18),
-                    _countText(
-                      _followersCount,
-                      'Followers',
-                      () => _openConnections(followers: true),
-                    ),
-                  ],
-                ),
+                _buildConnectionsCard(),
               ],
             ),
         ),
@@ -2623,6 +2710,66 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
+  // ============================================================
+  // VERIFICATION
+  // ============================================================
+
+  bool get _isVerified =>
+      _user?['isVerified'] == true || _user?['verified'] == true;
+
+  /// Pink badge with a white tick (same pink as the camera buttons).
+  Widget _verifiedBadge({double size = 19}) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: const BoxDecoration(color: _accent, shape: BoxShape.circle),
+      child: Icon(Icons.check_rounded, color: Colors.white, size: size * .72),
+    );
+  }
+
+  /// Black (light mode) / white (dark mode) filled button.
+  Widget _getVerifiedButton() {
+    return SizedBox(
+      height: 32,
+      child: FilledButton(
+        onPressed: _openVerification,
+        style: FilledButton.styleFrom(
+          backgroundColor: _iconColor,
+          foregroundColor: _isDark ? Colors.black : Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          minimumSize: const Size(0, 32),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+        child: const Text(
+          'Get verified',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+        ),
+      ),
+    );
+  }
+
+  /// Opens Settings > Password and security > Verification selfie
+  /// (the same screen, opened directly).
+  Future<void> _openVerification() async {
+    final verified = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const VerificationSelfieScreen()),
+    );
+
+    if (!mounted) return;
+
+    if (verified == true) {
+      setState(() {
+        _user = {...?_user, 'isVerified': true};
+      });
+
+      await _loadProfile();
+    }
+  }
+
   Widget _websiteLink() {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -2630,7 +2777,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _boldIcon(Icons.link_rounded, 18, _linkColor),
+          Icon(Icons.link_rounded, size: 18, color: _iconColor),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
@@ -2640,7 +2787,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               style: const TextStyle(
                 color: _linkColor,
                 fontSize: 13.5,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),
@@ -2679,7 +2826,8 @@ class _ProfileScreenState extends State<ProfileScreen>
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _boldIcon(icon, 17, _muted),
+        // Plain (non-bold) icon in black (light) / white (dark).
+        Icon(icon, size: 17, color: _iconColor),
         const SizedBox(width: 6),
         Flexible(
           child: Text(
@@ -2689,9 +2837,39 @@ class _ProfileScreenState extends State<ProfileScreen>
             style: TextStyle(
               color: _muted,
               fontSize: 13.5,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
             ),
           ),
+        ),
+      ],
+    );
+  }
+
+  /// "245 Following • 1.2K Followers" on one line, no card or border,
+  /// with a small pink dot between the two.
+  Widget _buildConnectionsCard() {
+    return Row(
+      children: [
+        _countText(
+          _followingCount,
+          'Following',
+          () => _openConnections(followers: false),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Container(
+            width: 5,
+            height: 5,
+            decoration: const BoxDecoration(
+              color: _accent,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+        _countText(
+          _followersCount,
+          'Followers',
+          () => _openConnections(followers: true),
         ),
       ],
     );
@@ -2702,25 +2880,27 @@ class _ProfileScreenState extends State<ProfileScreen>
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Count stays bold, exactly as before.
             Text(
               _formatCount(count),
               style: TextStyle(
                 color: _text,
-                fontSize: 13.5,
+                fontSize: 15,
                 fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(width: 5),
+            const SizedBox(width: 6),
+            // Label is now normal weight.
             Text(
               label,
               style: TextStyle(
                 color: _muted,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w800,
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ],
@@ -2794,7 +2974,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         iconTheme: IconThemeData(color: _text),
         shape: Border(bottom: BorderSide(color: _divider, width: 0.8)),
         title: Text(
-          _displayName.isNotEmpty ? _displayName : 'Profile',
+          _user == null ? '' : _displayName,
           style: TextStyle(
             color: _text,
             fontSize: 18,

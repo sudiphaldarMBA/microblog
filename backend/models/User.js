@@ -154,6 +154,40 @@ const userSchema = new mongoose.Schema(
 
 
     // ==========================================
+    // ACCOUNT VERIFICATION
+    // ==========================================
+
+    verificationStatus: {
+      type: String,
+      enum: ["not_submitted", "pending", "verified", "rejected"],
+      default: "not_submitted",
+      index: true,
+    },
+
+    verificationSelfie: {
+      type: String,
+      default: "",
+      select: false,
+    },
+
+    verificationSubmittedAt: {
+      type: Date,
+      default: null,
+    },
+
+    verificationReviewedAt: {
+      type: Date,
+      default: null,
+    },
+
+    verificationRejectionReason: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: "",
+    },
+
+    // ==========================================
     // ACCOUNT STATUS
     // ==========================================
 

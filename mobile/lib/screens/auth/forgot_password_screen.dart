@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../services/api_service.dart';
+import 'package:firebase_core/firebase_core.dart';
+import '../../firebase_options.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -159,6 +161,7 @@ Future<void> _verifyEmailOtp() async {
 }
 
 
+
 Future<void> _requestPhoneOtp() async {
   final phoneNumber = _phoneController.text.trim();
 
@@ -172,7 +175,9 @@ Future<void> _requestPhoneOtp() async {
   setState(() => _isLoading = true);
 
   try {
-    await FirebaseAuth.instance.verifyPhoneNumber(
+    final recoveryAuth = await _getRecoveryFirebaseAuth();
+
+    await recoveryAuth.verifyPhoneNumber(
       phoneNumber: phoneNumber,
       timeout: const Duration(seconds: 60),
 
@@ -220,6 +225,7 @@ Future<void> _requestPhoneOtp() async {
     setState(() => _isLoading = false);
   }
 }
+
 
 String _firebaseErrorMessage(FirebaseAuthException error) {
   switch (error.code) {
@@ -282,6 +288,20 @@ void _showMessage(String message) {
   );
 }
 
+Future<FirebaseAuth> _getRecoveryFirebaseAuth() async {
+  FirebaseApp recoveryApp;
+
+  try {
+    recoveryApp = Firebase.app('microblog-password-recovery');
+  } on FirebaseException {
+    recoveryApp = await Firebase.initializeApp(
+      name: 'microblog-password-recovery',
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  }
+
+  return FirebaseAuth.instanceFor(app: recoveryApp);
+}
 
 Future<void> _completePhoneRecovery(
   PhoneAuthCredential credential,
@@ -290,9 +310,12 @@ Future<void> _completePhoneRecovery(
     setState(() => _isLoading = true);
   }
 
+  FirebaseAuth? recoveryAuth;
+
   try {
-    final userCredential =
-        await FirebaseAuth.instance.signInWithCredential(
+    recoveryAuth = await _getRecoveryFirebaseAuth();
+
+    final userCredential = await recoveryAuth.signInWithCredential(
       credential,
     );
 
@@ -302,15 +325,12 @@ Future<void> _completePhoneRecovery(
       throw Exception('Phone verification failed.');
     }
 
-    // Force-refresh the Firebase ID token.
     final idToken = await firebaseUser.getIdToken(true);
 
     if (idToken == null || idToken.isEmpty) {
       throw Exception('Unable to obtain Firebase verification token.');
     }
 
-    // Verify the Firebase phone identity with our backend.
-    // This does NOT create a MicroBlog login session.
     final response = await ApiService.verifyPasswordResetPhone(
       idToken: idToken,
     );
@@ -341,6 +361,14 @@ Future<void> _completePhoneRecovery(
 
     _showMessage('Unable to verify phone number. Please try again.');
   } finally {
+    if (recoveryAuth != null) {
+      try {
+        await recoveryAuth.signOut();
+      } catch (error) {
+        debugPrint('Recovery Firebase sign-out error: $error');
+      }
+    }
+
     if (mounted) {
       setState(() => _isLoading = false);
     }

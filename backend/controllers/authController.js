@@ -1853,3 +1853,122 @@ exports.verifyPasswordResetPhone = async (req, res) => {
     });
   }
 };
+
+// ==========================================================
+// ACCOUNT VERIFICATION — SUBMIT SELFIE
+// ==========================================================
+
+exports.submitVerificationSelfie = async (req, res) => {
+  try {
+    const selfie = req.body.selfie;
+
+    if (!selfie || typeof selfie !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "Selfie is required",
+      });
+    }
+
+    // Accept only supported image formats.
+    const selfiePattern =
+      /^data:image\/(jpeg|jpg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
+
+    if (!selfiePattern.test(selfie)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid selfie image format",
+      });
+    }
+
+    // Limit the encoded image size to approximately 5 MB.
+    if (selfie.length > 7 * 1024 * 1024) {
+      return res.status(413).json({
+        success: false,
+        message: "Selfie image is too large. Please upload a smaller image.",
+      });
+    }
+
+    const user = await User.findById(req.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (user.verificationStatus === "verified") {
+      return res.status(409).json({
+        success: false,
+        message: "Your account is already verified",
+        verificationStatus: "verified",
+      });
+    }
+
+    if (user.verificationStatus === "pending") {
+      return res.status(409).json({
+        success: false,
+        message: "Your verification application is already under review",
+        verificationStatus: "pending",
+      });
+    }
+
+    // Store the selfie and submit for manual review.
+    user.verificationSelfie = selfie;
+    user.verificationStatus = "pending";
+    user.verificationSubmittedAt = new Date();
+    user.verificationReviewedAt = null;
+    user.verificationRejectionReason = "";
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Verification application submitted successfully",
+      verificationStatus: "pending",
+      submittedAt: user.verificationSubmittedAt,
+    });
+  } catch (error) {
+    console.error("Submit verification selfie error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to submit verification application",
+    });
+  }
+};
+
+
+// ==========================================================
+// ACCOUNT VERIFICATION — GET STATUS
+// ==========================================================
+
+exports.getVerificationStatus = async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      verificationStatus:
+        user.verificationStatus || "not_submitted",
+      submittedAt: user.verificationSubmittedAt,
+      reviewedAt: user.verificationReviewedAt,
+      rejectionReason:
+        user.verificationRejectionReason || "",
+    });
+  } catch (error) {
+    console.error("Get verification status error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to retrieve verification status",
+    });
+  }
+};
