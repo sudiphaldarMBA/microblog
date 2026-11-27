@@ -315,10 +315,11 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       result = await ApiService.firebaseLogin(
-        idToken: refreshedToken,
-        displayName: profile['displayName'],
-        username: profile['username'],
-      );
+      idToken: refreshedToken,
+      displayName: profile['displayName'],
+      username: profile['username'],
+      accountType: profile['accountType'],
+     );
     }
 
     if (!mounted) return;
@@ -882,6 +883,7 @@ class _OtpDialogState extends State<_OtpDialog> {
   }
 }
 
+
 // ============================================================
 // NEW FIREBASE ACCOUNT PROFILE SETUP DIALOG
 // ============================================================
@@ -904,6 +906,11 @@ class _ProfileSetupDialogState extends State<_ProfileSetupDialog> {
   late final TextEditingController _usernameController;
 
   final _formKey = GlobalKey<FormState>();
+
+  // Individual is selected by default.
+  String _accountType = 'individual';
+
+  static const Color _rose = Color(0xFFF91880);
 
   @override
   void initState() {
@@ -940,7 +947,74 @@ class _ProfileSetupDialogState extends State<_ProfileSetupDialog> {
     Navigator.of(context).pop({
       'displayName': _nameController.text.trim(),
       'username': _usernameController.text.trim(),
+      'accountType': _accountType,
     });
+  }
+
+  Widget _buildAccountTypeOption({
+    required String value,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+  }) {
+    final isSelected = _accountType == value;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Expanded(
+      child: InkWell(
+        onTap: () {
+          setState(() => _accountType = value);
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 14,
+          ),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? _rose.withValues(alpha: 0.10)
+                : Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected
+                  ? _rose
+                  : Theme.of(context).dividerColor,
+              width: isSelected ? 1.6 : 1,
+            ),
+          ),
+          child: Column(
+            children: [
+              Icon(
+                icon,
+                size: 25,
+                color: isDark ? Colors.white : Colors.black,
+              ),
+              const SizedBox(height: 7),
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: isSelected
+                      ? _rose
+                      : Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -949,48 +1023,95 @@ class _ProfileSetupDialogState extends State<_ProfileSetupDialog> {
       title: const Text('Complete your profile'),
       content: Form(
         key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Just one more step before joining MicroBlog.'),
-            const SizedBox(height: 18),
-            TextFormField(
-              controller: _nameController,
-              maxLength: 50,
-              decoration: const InputDecoration(
-                labelText: 'Display name',
-                prefixIcon: Icon(Icons.person_outline),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Just one more step before joining MicroBlog.',
               ),
-              validator: (value) {
-                if (value == null || value.trim().length < 3) {
-                  return 'Enter at least 3 characters.';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _usernameController,
-              maxLength: 30,
-              decoration: const InputDecoration(
-                labelText: 'Username',
-                prefixIcon: Icon(Icons.alternate_email),
+
+              const SizedBox(height: 18),
+
+              // ACCOUNT TYPE
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Choose account type',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
               ),
-              validator: (value) {
-                final username = value?.trim() ?? '';
 
-                if (!RegExp(r'^[a-zA-Z0-9_]{3,30}$').hasMatch(username)) {
-                  return 'Use 3–30 letters, numbers or _.';
-                }
+              const SizedBox(height: 10),
 
-                return null;
-              },
-            ),
-          ],
+              Row(
+                children: [
+                  _buildAccountTypeOption(
+                    value: 'individual',
+                    title: 'Individual',
+                    subtitle: 'Personal account',
+                    icon: Icons.person_outline,
+                  ),
+                  const SizedBox(width: 10),
+                  _buildAccountTypeOption(
+                    value: 'business',
+                    title: 'Business',
+                    subtitle: 'Business account',
+                    icon: Icons.business_outlined,
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 18),
+
+              // DISPLAY NAME
+              TextFormField(
+                controller: _nameController,
+                maxLength: 50,
+                decoration: const InputDecoration(
+                  labelText: 'Display name',
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().length < 3) {
+                    return 'Enter at least 3 characters.';
+                  }
+                  return null;
+                },
+              ),
+
+              const SizedBox(height: 12),
+
+              // USERNAME
+              TextFormField(
+                controller: _usernameController,
+                maxLength: 30,
+                decoration: const InputDecoration(
+                  labelText: 'Username',
+                  prefixIcon: Icon(Icons.alternate_email),
+                ),
+                validator: (value) {
+                  final username = value?.trim() ?? '';
+
+                  if (!RegExp(r'^[a-zA-Z0-9_]{3,30}$')
+                      .hasMatch(username)) {
+                    return 'Use 3–30 letters, numbers or _.';
+                  }
+
+                  return null;
+                },
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
-        FilledButton(onPressed: _submit, child: const Text('Continue')),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('Continue'),
+        ),
       ],
     );
   }

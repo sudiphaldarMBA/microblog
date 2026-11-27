@@ -6,6 +6,7 @@ function isValidObjectId(id) {
   return mongoose.Types.ObjectId.isValid(id);
 }
 
+
 // Public view of a user. Never includes email or password.
 function buildPublicProfile(user, viewerId) {
   const followers = Array.isArray(user.followers) ? user.followers : [];
@@ -21,6 +22,13 @@ function buildPublicProfile(user, viewerId) {
         : user.username,
 
     username: user.username,
+
+    // Account identity
+    accountType: user.accountType || "individual",
+
+    // Verification status for public badge display
+    verificationStatus: user.verificationStatus || "not_submitted",
+
     bio: user.bio || "",
     avatar: user.avatar || "",
     coverPhoto: user.coverPhoto || "",
@@ -43,6 +51,7 @@ function buildPublicProfile(user, viewerId) {
     createdAt: user.createdAt,
   };
 }
+
 
 // ==========================================================
 // GET A USER'S PUBLIC PROFILE

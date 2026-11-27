@@ -273,18 +273,26 @@ class ApiService {
   // AUTH API
   // ============================================================
 
+  
   static Future<Map<String, dynamic>> register({
     String? displayName,
     required String username,
     required String email,
     required String password,
+    String accountType = 'individual',
   }) async {
+    final normalizedAccountType = accountType.trim().toLowerCase();
+
+    if (!['individual', 'business'].contains(normalizedAccountType)) {
+      throw ArgumentError('Invalid account type.');
+    }
+
     final response = await http.post(
       Uri.parse('$baseUrl/auth/register'),
       headers: {
-  'Content-Type': 'application/json',
-  'Accept': 'application/json',
-},
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
       body: jsonEncode({
         'displayName': displayName?.trim().isNotEmpty == true
             ? displayName!.trim()
@@ -292,11 +300,13 @@ class ApiService {
         'username': username.trim(),
         'email': email.trim(),
         'password': password,
+        'accountType': normalizedAccountType,
       }),
     );
 
     return _decode(response);
   }
+
 
   static Future<Map<String, dynamic>> login({
     required String email,
@@ -329,6 +339,7 @@ class ApiService {
     return result;
   }
 
+  
   // ============================================================
   // FIREBASE AUTHENTICATION (GOOGLE + PHONE OTP)
   // ============================================================
@@ -337,12 +348,18 @@ class ApiService {
     required String idToken,
     String? displayName,
     String? username,
+    String? accountType,
   }) async {
     if (idToken.trim().isEmpty) {
-      return {'success': false, 'message': 'Firebase ID token is required'};
+      return {
+        'success': false,
+        'message': 'Firebase ID token is required',
+      };
     }
 
-    final body = <String, dynamic>{'idToken': idToken.trim()};
+    final body = <String, dynamic>{
+      'idToken': idToken.trim(),
+    };
 
     if (displayName != null && displayName.trim().isNotEmpty) {
       body['displayName'] = displayName.trim();
@@ -352,13 +369,26 @@ class ApiService {
       body['username'] = username.trim();
     }
 
+    if (accountType != null && accountType.trim().isNotEmpty) {
+      final normalizedAccountType = accountType.trim().toLowerCase();
+
+      if (!['individual', 'business'].contains(normalizedAccountType)) {
+        return {
+          'success': false,
+          'message': 'Invalid account type.',
+        };
+      }
+
+      body['accountType'] = normalizedAccountType;
+    }
+
     final response = await http.post(
       Uri.parse('$baseUrl/auth/firebase-login'),
       headers: {
-  'Content-Type': 'application/json',
-  'Accept': 'application/json',
-  ..._deviceHeaders(),
-},
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        ..._deviceHeaders(),
+      },
       body: jsonEncode(body),
     );
 
@@ -378,6 +408,7 @@ class ApiService {
 
     return result;
   }
+
   // ==========================================
   // GET ACCOUNT VERIFICATION STATUS
  // ==========================================

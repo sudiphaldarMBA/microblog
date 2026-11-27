@@ -22,6 +22,7 @@ import 'home_video_player.dart';
 import '../shorts/shorts_screen.dart';
 import 'post_viewer_screens.dart';
 import 'package:visibility_detector/visibility_detector.dart';
+import '../../widgets/verified_badge.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -208,12 +209,55 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ============================================================
+  // VERIFIED BADGE HELPER
+  // ============================================================
+
+  bool _isAuthorVerified(Map<String, dynamic> author) {
+    bool flagged(Map<dynamic, dynamic>? user) {
+      if (user == null) return false;
+
+      return user['isVerified'] == true ||
+          user['verified'] == true ||
+          user['verificationStatus']?.toString().toLowerCase() == 'verified';
+    }
+
+    // Own posts: use the freshly loaded verification state.
+    final myId =
+        _currentUser?['_id']?.toString() ?? _currentUser?['id']?.toString() ?? '';
+
+    final authorId = author['_id']?.toString() ?? author['id']?.toString() ?? '';
+
+    if (myId.isNotEmpty && authorId == myId && flagged(_currentUser)) {
+      return true;
+    }
+
+    return flagged(author);
+  }
+
+  // ============================================================
   // USER
   // ============================================================
 
   Future<void> _loadUser() async {
     try {
       final user = await ApiService.getCurrentUser();
+
+      // /auth/me may not include verification, so ask for it directly
+      // (same call the profile screen uses).
+      try {
+        final verification = await ApiService.getVerificationStatus();
+
+        if (verification['success'] == true) {
+          final status = verification['verificationStatus']
+              ?.toString()
+              .toLowerCase();
+
+          user['verificationStatus'] = status;
+          user['isVerified'] = status == 'verified';
+        }
+      } catch (error) {
+        debugPrint('Home verification status error: $error');
+      }
 
       if (!mounted) {
         return;
@@ -1354,22 +1398,33 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  // Full name (tap to open profile)
-                                  GestureDetector(
-                                    behavior: HitTestBehavior.opaque,
-                                    onTap: () => _openAuthorProfile(author),
-                                    child: Text(
-                                      name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: _text,
-                                        fontSize: 15.5,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  ),
+                                  // Full name + verified badge (tap to open profile)
+GestureDetector(
+  behavior: HitTestBehavior.opaque,
+  onTap: () => _openAuthorProfile(author),
+  child: Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Flexible(
+        child: Text(
+          name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: _text,
+            fontSize: 15.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
 
+      if (_isAuthorVerified(author)) ...[
+        const SizedBox(width: 4),
+        const VerifiedBadge(size: 16),
+      ],
+    ],
+  ),
+),
                                   const SizedBox(height: 2),
 
                                   // Username + time
@@ -1492,22 +1547,33 @@ class _HomeScreenState extends State<HomeScreen> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          GestureDetector(
-                                            behavior: HitTestBehavior.opaque,
-                                            onTap: () => _openAuthorProfile(
-                                              originalAuthor,
-                                            ),
-                                            child: Text(
-                                              originalName,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                color: _text,
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                            ),
-                                          ),
+// Full name + verified badge (tap to open profile)
+GestureDetector(
+  behavior: HitTestBehavior.opaque,
+  onTap: () => _openAuthorProfile(originalAuthor),
+  child: Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Flexible(
+        child: Text(
+          originalName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: _text,
+            fontSize: 14.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+
+      if (_isAuthorVerified(originalAuthor)) ...[
+        const SizedBox(width: 4),
+        const VerifiedBadge(size: 15),
+      ],
+    ],
+  ),
+),
                                           const SizedBox(height: 2),
                                           Row(
                                             children: [

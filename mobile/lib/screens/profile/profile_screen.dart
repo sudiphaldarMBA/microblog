@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/api_service.dart';
 import '../../widgets/comments_sheet.dart';
+import '../../widgets/verified_badge.dart';
 import '../home/home_video_player.dart';
 import '../settings/verification_selfie_screen.dart';
 import 'edit_profile_screen.dart';
@@ -296,10 +297,34 @@ class _ProfileScreenState extends State<ProfileScreen>
         user = Map<String, dynamic>.from(result['data']['user']);
       }
 
-      if (!mounted) return;
+      // Synchronize verification status from the backend.
+if (user != null) {
+  try {
+    final verificationResult =
+        await ApiService.getVerificationStatus();
 
-      setState(() {
-        _user = user ?? _user;
+    if (verificationResult['success'] == true) {
+      final status = verificationResult['verificationStatus']
+          ?.toString()
+          .toLowerCase();
+
+      user['verificationStatus'] = status;
+      user['isVerified'] = status == 'verified';
+    }
+  } catch (error) {
+    debugPrint('Verification Status Error: $error');
+
+    // Preserve the previously confirmed state if refresh fails.
+    user['isVerified'] =
+        _user?['isVerified'] == true ||
+        user['verificationStatus'] == 'verified';
+  }
+}
+
+if (!mounted) return;
+
+setState(() {
+  _user = user ?? _user;
 
         _followersCount = _readCount(
           user?['followersCount'],
@@ -2717,15 +2742,8 @@ class _ProfileScreenState extends State<ProfileScreen>
   bool get _isVerified =>
       _user?['isVerified'] == true || _user?['verified'] == true;
 
-  /// Pink badge with a white tick (same pink as the camera buttons).
-  Widget _verifiedBadge({double size = 19}) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: const BoxDecoration(color: _accent, shape: BoxShape.circle),
-      child: Icon(Icons.check_rounded, color: Colors.white, size: size * .72),
-    );
-  }
+  /// Bold scalloped pink badge (tick: black in light, white in dark).
+  Widget _verifiedBadge({double size = 16}) => VerifiedBadge(size: size);
 
   /// Black (light mode) / white (dark mode) filled button.
   Widget _getVerifiedButton() {

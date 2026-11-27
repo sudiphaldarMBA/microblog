@@ -37,6 +37,8 @@ function buildUserResponse(user) {
 
     username: user.username,
 
+    accountType: user.accountType || "individual",
+
     email: user.email || "",
 
     bio: user.bio || "",
@@ -138,11 +140,12 @@ if (deviceType === "unknown") {
 exports.register = async (req, res) => {
   try {
     const {
-      displayName,
-      username,
-      email,
-      password,
-    } = req.body;
+  displayName,
+  username,
+  email,
+  password,
+  accountType = "individual",
+} = req.body;
 
     // --------------------------------------------------------
     // REQUIRED FIELDS
@@ -174,6 +177,18 @@ exports.register = async (req, res) => {
 
     const normalizedEmail =
       email.toString().trim().toLowerCase();
+
+      const normalizedAccountType =
+  typeof accountType === "string"
+    ? accountType.trim().toLowerCase()
+    : "";
+
+if (!["individual", "business"].includes(normalizedAccountType)) {
+  return res.status(400).json({
+    success: false,
+    message: "Invalid account type.",
+  });
+}
 
     // --------------------------------------------------------
     // VALIDATE DISPLAY NAME
@@ -283,6 +298,9 @@ exports.register = async (req, res) => {
         email:
           normalizedEmail,
 
+          accountType:
+          normalizedAccountType,
+
         password:
           hashedPassword,
       });
@@ -308,6 +326,9 @@ exports.register = async (req, res) => {
 
         email:
           user.email,
+         
+          accountType:
+            user.accountType,
       },
     });
   } catch (error) {
@@ -470,10 +491,11 @@ exports.login = async (req, res) => {
 exports.firebaseLogin = async (req, res) => {
   try {
     const {
-      idToken,
-      displayName,
-      username,
-    } = req.body;
+  idToken,
+  displayName,
+  username,
+  accountType = "individual",
+} = req.body;
 
     // --------------------------------------------------------
     // VALIDATE FIREBASE TOKEN
@@ -655,6 +677,22 @@ exports.firebaseLogin = async (req, res) => {
     }
 
     // --------------------------------------------------------
+// VALIDATE ACCOUNT TYPE FOR NEW FIREBASE USERS
+// --------------------------------------------------------
+
+const normalizedAccountType =
+  typeof accountType === "string"
+    ? accountType.trim().toLowerCase()
+    : "";
+
+if (!["individual", "business"].includes(normalizedAccountType)) {
+  return res.status(400).json({
+    success: false,
+    message: "Invalid account type. Choose individual or business.",
+  });
+}
+
+    // --------------------------------------------------------
     // VALIDATE DISPLAY NAME
     // --------------------------------------------------------
 
@@ -699,21 +737,23 @@ exports.firebaseLogin = async (req, res) => {
     // --------------------------------------------------------
 
     user = await User.create({
-      displayName: trimmedDisplayName,
-      username: normalizedUsername,
+  displayName: trimmedDisplayName,
+  username: normalizedUsername,
 
-      ...(verifiedEmail ? { email: verifiedEmail } : {}),
+  accountType: normalizedAccountType,
 
-      firebaseUid: firebaseUid,
+  ...(verifiedEmail ? { email: verifiedEmail } : {}),
 
-      ...(verifiedPhone
-        ? { phoneNumber: verifiedPhone }
-        : {}),
+  firebaseUid: firebaseUid,
 
-      authProviders: [provider],
+  ...(verifiedPhone
+    ? { phoneNumber: verifiedPhone }
+    : {}),
 
-      avatar: decodedToken.picture || "",
-    });
+  authProviders: [provider],
+
+  avatar: decodedToken.picture || "",
+});
 
     // --------------------------------------------------------
     // CREATE MICROBLOG JWT

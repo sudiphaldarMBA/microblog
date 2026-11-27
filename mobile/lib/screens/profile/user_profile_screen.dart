@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/api_service.dart';
 import '../../widgets/comments_sheet.dart';
+import '../../widgets/verified_badge.dart';
 import 'package:share_plus/share_plus.dart';
 import '../home/home_video_player.dart';
 import 'follow_list_screen.dart';
@@ -295,6 +296,9 @@ Future<void> _shareProfilePost(Map<String, dynamic> post) async {
 
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
 
+  /// Icons: black in light mode, white in dark mode.
+  Color get _iconColor => _isDark ? Colors.white : Colors.black;
+
   Color get _background =>
       _isDark ? const Color(0xFF08090B) : const Color(0xFFF7F8FA);
 
@@ -579,6 +583,69 @@ Future<void> _loadCommentedPosts() async {
 
   bool get _isMe => _user?['isMe'] == true;
 
+  bool _flagVerified(Map<dynamic, dynamic>? user) {
+    if (user == null) return false;
+
+    return user['isVerified'] == true ||
+        user['verified'] == true ||
+        user['verificationStatus']?.toString().toLowerCase() == 'verified';
+  }
+
+  /// Is the person whose profile this is verified?
+  bool get _isVerified => _flagVerified(_user);
+
+
+  /// Business accounts only.
+  bool _isBusinessAccount(Map<dynamic, dynamic>? user) {
+    return user?['accountType']?.toString().toLowerCase() == 'business';
+  }
+
+  bool get _isBusiness => _isBusinessAccount(_user);
+
+  Widget _businessBadge({double fontSize = 11}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: _accent.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: _accent.withOpacity(0.65),
+          width: 0.8,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.business_outlined,
+            size: fontSize + 3,
+            color: _accent,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'Business',
+            style: TextStyle(
+              color: _accent,
+              fontSize: fontSize,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  /// Is this post author verified? (Posts shown here by the profile owner
+  /// use the profile's own verification state.)
+  bool _authorVerified(Map<String, dynamic> author) {
+    final id = (author['_id'] ?? author['id'] ?? '').toString();
+
+    if (id.isNotEmpty && id == widget.userId && _isVerified) return true;
+
+    return _flagVerified(author);
+  }
+
   int get _followersCount => (_user?['followersCount'] as num?)?.toInt() ?? 0;
 
   int get _followingCount => (_user?['followingCount'] as num?)?.toInt() ?? 0;
@@ -844,7 +911,7 @@ Future<void> _loadCommentedPosts() async {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _boldIcon(icon, 17, _muted),
+        Icon(icon, size: 17, color: _iconColor),
         const SizedBox(width: 6),
         Flexible(
           child: Text(
@@ -854,7 +921,7 @@ Future<void> _loadCommentedPosts() async {
             style: TextStyle(
               color: _muted,
               fontSize: 13.5,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ),
@@ -867,7 +934,7 @@ Future<void> _loadCommentedPosts() async {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -875,17 +942,17 @@ Future<void> _loadCommentedPosts() async {
               _formatCount(count),
               style: TextStyle(
                 color: _text,
-                fontSize: 13.5,
+                fontSize: 15,
                 fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(width: 5),
+            const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
                 color: _muted,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w800,
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ],
@@ -1032,8 +1099,7 @@ Future<void> _loadCommentedPosts() async {
             children: [
               const SizedBox(height: 6),
               Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Flexible(
                     child: Text(
@@ -1048,6 +1114,14 @@ Future<void> _loadCommentedPosts() async {
                       ),
                     ),
                   ),
+                  if (_isVerified) ...[
+                  const SizedBox(width: 6),
+                  const VerifiedBadge(size: 16),
+                  ],
+                  if (_isBusiness) ...[
+                  const SizedBox(width: 7),
+                  _businessBadge(),
+                  ],
                   const SizedBox(width: 8),
                   if (_username.isNotEmpty)
                     Flexible(
@@ -1091,7 +1165,7 @@ Future<void> _loadCommentedPosts() async {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      _boldIcon(Icons.link_rounded, 18, _linkColor),
+                      Icon(Icons.link_rounded, size: 18, color: _iconColor),
                       const SizedBox(width: 6),
                       Flexible(
                         child: Text(
@@ -1101,7 +1175,7 @@ Future<void> _loadCommentedPosts() async {
                           style: const TextStyle(
                             color: _linkColor,
                             fontSize: 13.5,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
                       ),
@@ -1117,7 +1191,17 @@ Future<void> _loadCommentedPosts() async {
                     'Following',
                     () => _openConnections(followers: false),
                   ),
-                  const SizedBox(width: 18),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Container(
+                      width: 5,
+                      height: 5,
+                      decoration: const BoxDecoration(
+                        color: _accent,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
                   _count(
                     _followersCount,
                     'Followers',
@@ -1327,15 +1411,26 @@ Future<void> _loadCommentedPosts() async {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: _text,
-                        fontSize: 15.5,
-                        fontWeight: FontWeight.w800,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: _text,
+                              fontSize: 15.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        if (_authorVerified(authorMap)) ...[
+                          const SizedBox(width: 4),
+                          const VerifiedBadge(size: 15),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Row(
@@ -1452,6 +1547,10 @@ Future<void> _loadCommentedPosts() async {
                   ),
                 ),
               ),
+              if (_authorVerified(author)) ...[
+                const SizedBox(width: 4),
+                const VerifiedBadge(size: 14),
+              ],
               if (username.isNotEmpty) ...[
                 const SizedBox(width: 6),
                 Flexible(

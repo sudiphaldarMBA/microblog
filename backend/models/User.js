@@ -28,6 +28,18 @@ const userSchema = new mongoose.Schema(
       unique: true,
     },
 
+// ==========================================
+// ACCOUNT TYPE
+// ==========================================
+
+accountType: {
+  type: String,
+  enum: ["individual", "business"],
+  default: "individual",
+  lowercase: true,
+  trim: true,
+},
+
     // ==========================================
     // EMAIL
     // Required for password accounts.

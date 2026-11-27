@@ -10,6 +10,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../services/api_service.dart';
 import '../../widgets/comments_sheet.dart';
+import '../../widgets/verified_badge.dart';
 import '../profile/profile_screen.dart';
 import '../profile/user_profile_screen.dart';
 
@@ -34,7 +35,12 @@ class _ShortsScreenState extends State<ShortsScreen> {
   int _activeIndex = 0;
 
   String _myId = '';
+  bool _myVerified = false;
   bool _publishing = false;
+
+  // Authors the current user follows (by user id) + follow requests running.
+  final Set<String> _followingIds = {};
+  final Set<String> _followLoading = {};
 
   // True while another screen (for example a profile) is open on top,
   // so the Short stops playing in the background.
@@ -51,8 +57,180 @@ class _ShortsScreenState extends State<ShortsScreen> {
     try {
       final me = await ApiService.getCurrentUser();
       _myId = (me['_id'] ?? me['id'] ?? '').toString();
+
+      _myVerified = me['isVerified'] == true ||
+          me['verificationStatus']?.toString().toLowerCase() == 'verified';
+
+      // /auth/me may not include verification: ask directly
+      // (same call the profile and home screens use).
+      try {
+        final verification = await ApiService.getVerificationStatus();
+
+        if (verification['success'] == true) {
+          _myVerified =
+              verification['verificationStatus']?.toString().toLowerCase() ==
+              'verified';
+        }
+      } catch (error) {
+        debugPrint('Shorts verification status error: $error');
+      }
+
+      if (mounted) setState(() {});
+
+      _loadFollowing();
     } catch (_) {}
   }
+
+  /// Loads the ids of the people I already follow, so the follow button
+  /// shows the right state.
+  Future<void> _loadFollowing() async {
+    if (_myId.isEmpty) return;
+
+    try {
+      final result = await ApiService.getConnections(
+        userId: _myId,
+        followers: false,
+      );
+
+      if (result['success'] != true) return;
+
+      final data = result['data'];
+
+      List<dynamic>? list;
+
+      if (data is List) {
+        list = data;
+      } else if (data is Map) {
+        for (final key in ['following', 'users', 'connections']) {
+          if (data[key] is List) {
+            list = data[key] as List;
+            break;
+          }
+        }
+
+        list ??= data.values.whereType<List>().firstOrNull;
+      }
+
+      if (list == null) return;
+
+      final ids = <String>{};
+
+      for (final item in list) {
+        var user = item;
+
+        if (user is Map && user['user'] is Map) user = user['user'];
+
+        final id = user is Map
+            ? (user['_id'] ?? user['id'] ?? '').toString()
+            : user?.toString() ?? '';
+
+        if (id.isNotEmpty) ids.add(id);
+      }
+
+      if (!mounted) return;
+
+      setState(() => _followingIds.addAll(ids));
+    } catch (error) {
+      debugPrint('Shorts following list error: $error');
+    }
+  }
+
+  String _authorId(Map<String, dynamic> post) {
+    final author = _authorOf(post);
+    return (author['_id'] ?? author['id'] ?? '').toString();
+  }
+
+  bool _isAuthorVerified(Map<String, dynamic> post) {
+    final author = _authorOf(post);
+
+    if (_myId.isNotEmpty && _authorId(post) == _myId && _myVerified) {
+      return true;
+    }
+
+    return author['isVerified'] == true ||
+        author['verified'] == true ||
+        author['verificationStatus']?.toString().toLowerCase() == 'verified';
+  }
+
+  Future<void> _toggleFollow(Map<String, dynamic> post) async {
+    final authorId = _authorId(post);
+
+    if (authorId.isEmpty ||
+        authorId == _myId ||
+        _followLoading.contains(authorId)) {
+      return;
+    }
+
+    final wasFollowing = _followingIds.contains(authorId);
+
+    // Optimistic update.
+    setState(() {
+      _followLoading.add(authorId);
+
+      if (wasFollowing) {
+        _followingIds.remove(authorId);
+      } else {
+        _followingIds.add(authorId);
+      }
+    });
+
+    try {
+      final result = await ApiService.toggleFollow(userId: authorId);
+
+      if (result['success'] != true) {
+        throw Exception(result['message'] ?? 'Unable to update follow');
+      }
+
+      final data = result['data'];
+
+      final server = data is Map
+          ? (data['following'] ?? data['isFollowing'] ?? data['followed'])
+          : null;
+
+      if (!mounted) return;
+
+      setState(() {
+        if (server is bool) {
+          if (server) {
+            _followingIds.add(authorId);
+          } else {
+            _followingIds.remove(authorId);
+          }
+        }
+      });
+
+      _showMessage(
+        _followingIds.contains(authorId)
+            ? 'Following @${_username(post)}'
+            : 'Unfollowed @${_username(post)}',
+      );
+    } catch (error) {
+      debugPrint('Short follow error: $error');
+
+      if (!mounted) return;
+
+      // Revert.
+      setState(() {
+        if (wasFollowing) {
+          _followingIds.add(authorId);
+        } else {
+          _followingIds.remove(authorId);
+        }
+      });
+
+      _showMessage(
+        error.toString().replaceFirst('Exception: ', ''),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _followLoading.remove(authorId));
+      }
+    }
+  }
+
+  int _savesCount(Map<String, dynamic> post) => _count(
+    post['bookmarksCount'] ?? post['savesCount'] ?? post['bookmarkCount'],
+  );
 
   Map<String, dynamic> _authorOf(Map<String, dynamic> post) {
     final author = post['author'];
@@ -272,6 +450,18 @@ class _ShortsScreenState extends State<ShortsScreen> {
         _shorts = videos;
         _loading = false;
         _error = null;
+
+        // If the API already tells us who I follow, use it.
+        for (final post in videos) {
+          final author = _authorOf(post);
+
+          final flag =
+              author['isFollowing'] ?? author['followedByMe'] ?? post['isFollowingAuthor'];
+
+          final id = (author['_id'] ?? author['id'] ?? '').toString();
+
+          if (flag == true && id.isNotEmpty) _followingIds.add(id);
+        }
       });
 
       if (videos.isNotEmpty) {
@@ -399,7 +589,11 @@ class _ShortsScreenState extends State<ShortsScreen> {
       }
 
       setState(() {
-        post['bookmarkedByMe'] = !(post['bookmarkedByMe'] == true);
+        final nowSaved = !(post['bookmarkedByMe'] == true);
+
+        post['bookmarkedByMe'] = nowSaved;
+        post['bookmarksCount'] = (_savesCount(post) + (nowSaved ? 1 : -1))
+            .clamp(0, 1 << 30);
       });
 
       _showMessage(
@@ -434,7 +628,13 @@ class _ShortsScreenState extends State<ShortsScreen> {
     ].where((part) => part.trim().isNotEmpty).join('\n\n');
 
     try {
-      await SharePlus.instance.share(ShareParams(text: text));
+      final result = await SharePlus.instance.share(ShareParams(text: text));
+
+      if (result.status == ShareResultStatus.success && mounted) {
+        setState(() {
+          post['sharesCount'] = _count(post['sharesCount']) + 1;
+        });
+      }
     } catch (error) {
       _showMessage('Unable to share this Short');
       debugPrint('Short share error: $error');
@@ -580,10 +780,18 @@ class _ShortsScreenState extends State<ShortsScreen> {
           displayName: _displayName(post),
           avatar: _authorOf(post)['avatar'],
           onOpenAuthor: () => _openAuthor(post),
+          isVerified: _isAuthorVerified(post),
+          createdAt: post['createdAt'],
           caption: _caption(post),
           likesCount: _count(post['likesCount']),
           commentsCount: _count(post['commentsCount']),
+          sharesCount: _count(post['sharesCount']),
+          savesCount: _savesCount(post),
           viewsCount: _count(post['viewsCount']),
+          showFollow: _authorId(post).isNotEmpty && _authorId(post) != _myId,
+          isFollowing: _followingIds.contains(_authorId(post)),
+          followLoading: _followLoading.contains(_authorId(post)),
+          onFollow: () => _toggleFollow(post),
           isLiked: post['likedByMe'] == true,
           isBookmarked: post['bookmarkedByMe'] == true,
           onLike: () => _toggleLike(index),
@@ -642,10 +850,18 @@ class _ShortPage extends StatefulWidget {
   final String displayName;
   final dynamic avatar;
   final VoidCallback onOpenAuthor;
+  final bool isVerified;
+  final dynamic createdAt;
   final String caption;
   final int likesCount;
   final int commentsCount;
+  final int sharesCount;
+  final int savesCount;
   final int viewsCount;
+  final bool showFollow;
+  final bool isFollowing;
+  final bool followLoading;
+  final VoidCallback onFollow;
   final bool isLiked;
   final bool isBookmarked;
   final VoidCallback onLike;
@@ -662,10 +878,18 @@ class _ShortPage extends StatefulWidget {
     required this.displayName,
     required this.avatar,
     required this.onOpenAuthor,
+    required this.isVerified,
+    required this.createdAt,
     required this.caption,
     required this.likesCount,
     required this.commentsCount,
+    required this.sharesCount,
+    required this.savesCount,
     required this.viewsCount,
+    required this.showFollow,
+    required this.isFollowing,
+    required this.followLoading,
+    required this.onFollow,
     required this.isLiked,
     required this.isBookmarked,
     required this.onLike,
@@ -930,10 +1154,9 @@ class _ShortPageState extends State<_ShortPage> {
                     _avatar(widget.avatar, widget.displayName, 18),
                     const SizedBox(width: 10),
                     Flexible(
+                      flex: 3,
                       child: Text(
-                        widget.username.isNotEmpty
-                            ? '${widget.displayName}  @${widget.username}'
-                            : widget.displayName,
+                        widget.displayName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -943,6 +1166,37 @@ class _ShortPageState extends State<_ShortPage> {
                         ),
                       ),
                     ),
+                    if (widget.isVerified) ...[
+                      const SizedBox(width: 4),
+                      const VerifiedBadge(size: 16),
+                    ],
+                    if (widget.username.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      Flexible(
+                        flex: 2,
+                        child: Text(
+                          '@${widget.username}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (_timeAgo(widget.createdAt).isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        '• ${_timeAgo(widget.createdAt)}',
+                        maxLines: 1,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1000,7 +1254,7 @@ class _ShortPageState extends State<_ShortPage> {
                 const SizedBox(height: 15),
                 _ShortAction(
                   icon: CupertinoIcons.arrowshape_turn_up_right,
-                  label: 'Share',
+                  label: _formatCount(widget.sharesCount),
                   onTap: widget.onShare,
                 ),
                 const SizedBox(height: 15),
@@ -1011,9 +1265,21 @@ class _ShortPageState extends State<_ShortPage> {
                   color: widget.isBookmarked
                       ? const Color(0xFF1D9BF0)
                       : Colors.white,
-                  label: 'Save',
+                  label: _formatCount(widget.savesCount),
                   onTap: widget.onBookmark,
                 ),
+                if (widget.showFollow) ...[
+                  const SizedBox(height: 15),
+                  _ShortAction(
+                    icon: widget.isFollowing
+                        ? CupertinoIcons.person_crop_circle_badge_checkmark
+                        : CupertinoIcons.person_add,
+                    color: widget.isFollowing
+                        ? const Color(0xFFF91880)
+                        : Colors.white,
+                    onTap: widget.followLoading ? null : widget.onFollow,
+                  ),
+                ],
               ],
             ),
           ),
@@ -1059,6 +1325,22 @@ class _ShortPageState extends State<_ShortPage> {
     );
   }
 
+  String _timeAgo(dynamic value) {
+    final date = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
+
+    if (date == null) return '';
+
+    final diff = DateTime.now().difference(date);
+
+    if (diff.isNegative || diff.inMinutes < 1) return 'now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
+    if (diff.inDays < 7) return '${diff.inDays}d';
+    if (diff.inDays < 365) return '${(diff.inDays / 7).floor()}w';
+
+    return '${(diff.inDays / 365).floor()}y';
+  }
+
   String _formatCount(int count) {
     if (count >= 1000000) {
       return '${(count / 1000000).toStringAsFixed(1)}M';
@@ -1072,13 +1354,13 @@ class _ShortPageState extends State<_ShortPage> {
 
 class _ShortAction extends StatelessWidget {
   final IconData icon;
-  final String label;
+  final String? label;
   final Color color;
   final VoidCallback? onTap;
 
   const _ShortAction({
     required this.icon,
-    required this.label,
+    this.label,
     this.color = Colors.white,
     required this.onTap,
   });
@@ -1104,17 +1386,19 @@ class _ShortAction extends StatelessWidget {
                   Shadow(color: color, offset: const Offset(-.45, 0)),
                 ],
               ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+              if (label != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  label!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),

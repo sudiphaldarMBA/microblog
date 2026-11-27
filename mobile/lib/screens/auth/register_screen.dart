@@ -25,6 +25,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
 
+ // Account type
+ String _accountType = 'individual';
+
   @override
   void dispose() {
     _displayNameController.dispose();
@@ -50,11 +53,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     try {
       final response = await ApiService.register(
-        displayName: _displayNameController.text.trim(),
-        username: _usernameController.text.trim(),
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
+  displayName: _displayNameController.text.trim(),
+  username: _usernameController.text.trim(),
+  email: _emailController.text.trim(),
+  password: _passwordController.text,
+  accountType: _accountType,
+);
 
       if (!mounted) return;
 
@@ -164,6 +168,120 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
+Widget _buildAccountTypeSelector(
+  Color secondaryText,
+  Color fieldColor,
+  bool isDark,
+) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _fieldLabel('ACCOUNT TYPE', secondaryText),
+      const SizedBox(height: 9),
+
+      Row(
+        children: [
+          Expanded(
+            child: _accountTypeCard(
+              title: 'Individual',
+              subtitle: 'Personal account',
+              icon: Icons.person_outline_rounded,
+              value: 'individual',
+              fieldColor: fieldColor,
+              secondaryText: secondaryText,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _accountTypeCard(
+              title: 'Business',
+              subtitle: 'Company or brand',
+              icon: Icons.business_outlined,
+              value: 'business',
+              fieldColor: fieldColor,
+              secondaryText: secondaryText,
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+Widget _accountTypeCard({
+  required String title,
+  required String subtitle,
+  required IconData icon,
+  required String value,
+  required Color fieldColor,
+  required Color secondaryText,
+}) {
+  final selected = _accountType == value;
+
+  return InkWell(
+    onTap: _isLoading
+        ? null
+        : () {
+            setState(() {
+              _accountType = value;
+            });
+          },
+    borderRadius: BorderRadius.circular(13),
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 15,
+      ),
+      decoration: BoxDecoration(
+        color: fieldColor,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(
+          color: selected ? _rose : Colors.transparent,
+          width: selected ? 1.5 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                icon,
+                size: 23,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              const Spacer(),
+              Icon(
+                selected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                size: 20,
+                color: selected ? _rose : secondaryText,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: 11,
+              color: secondaryText,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
   // ------------------------------------------------------------
   // BUILD
   // ------------------------------------------------------------
@@ -249,10 +367,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 34),
+                    const SizedBox(height: 30),
 
-                    // DISPLAY NAME
-                    _fieldLabel('DISPLAY NAME', secondaryText),
+                    // ACCOUNT TYPE
+                   _buildAccountTypeSelector(
+                   secondaryText,
+                   fieldColor,
+                   isDark,
+                    ),
+
+                   const SizedBox(height: 25),
+
+                   // DISPLAY NAME
+                   _fieldLabel('DISPLAY NAME', secondaryText),
 
                     const SizedBox(height: 9),
 
